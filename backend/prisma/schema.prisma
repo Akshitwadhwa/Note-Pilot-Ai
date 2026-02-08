@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  id               String      @id @default(cuid())
+  email            String      @unique
+  name             String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  timetableEntries Timetable[]
+  notes            Note[]
+}
+
+model Timetable {
+  id          String     @id @default(cuid())
+  userId      String
+  dayOfWeek   DayOfWeek
+  startTime   String
+  endTime     String
+  subjectName String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       Note[]
+
+  @@index([userId, dayOfWeek, startTime, endTime])
+}
+
+model Note {
+  id          String     @id @default(cuid())
+  userId      String
+  timetableId String
+  content     String
+  summary     String?
+  timestamp   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timetable   Timetable  @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  @@index([timetableId, timestamp])
+  @@index([userId, timestamp])
+}
