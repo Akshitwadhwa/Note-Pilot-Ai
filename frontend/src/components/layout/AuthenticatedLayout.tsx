@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, Navigate, NavLink } from "react-router-dom";
+import { Outlet, NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -51,24 +51,9 @@ const navItems = [
 ];
 
 export function AuthenticatedLayout() {
-  const { userReady, authReady, userEmail, signOut } = useAuth();
+  const { userReady, userEmail, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  if (!authReady) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-sky-200 border-t-sky-600 dark:border-sky-800 dark:border-t-sky-400" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!userReady) {
-    return <Navigate to="/auth" replace />;
-  }
 
   const initial = userEmail?.charAt(0).toUpperCase() ?? "U";
 
@@ -132,24 +117,28 @@ export function AuthenticatedLayout() {
 
         {/* User section */}
         <div className="border-t border-slate-200 p-4 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-700 dark:bg-sky-900 dark:text-sky-300">
-              {initial}
+          {userReady && userEmail ? (
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sm font-bold text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                {initial}
+              </div>
+              <div className="flex-1 truncate">
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {userEmail}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Student</p>
+              </div>
+              <button
+                onClick={() => void signOut()}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950 dark:hover:text-rose-400"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
-            <div className="flex-1 truncate">
-              <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                {userEmail}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Student</p>
-            </div>
-            <button
-              onClick={() => void signOut()}
-              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950 dark:hover:text-rose-400"
-              title="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-500 dark:text-slate-400">Not signed in</p>
+          )}
         </div>
       </aside>
 
