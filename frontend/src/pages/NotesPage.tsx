@@ -16,7 +16,9 @@ export function NotesPage() {
   const currentClassQuery = useQuery({
     queryKey: ["current-class", userId],
     queryFn: getCurrentClass,
-    enabled: userReady
+    enabled: userReady,
+    refetchInterval: 60000,
+    refetchIntervalInBackground: true
   });
 
   const notesQuery = useQuery({

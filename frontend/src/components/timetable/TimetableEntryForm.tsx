@@ -23,11 +23,18 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>("MONDAY");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
-  const [subjectName, setSubjectName] = useState("Machine Learning");
+  const [subjectName, setSubjectName] = useState("");
+  const trimmedSubjectName = subjectName.trim();
+  const isInvalid = !trimmedSubjectName || !startTime || !endTime;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onCreate({ dayOfWeek, startTime, endTime, subjectName: subjectName.trim() });
+    if (isInvalid) {
+      return;
+    }
+
+    await onCreate({ dayOfWeek, startTime, endTime, subjectName: trimmedSubjectName });
+    setSubjectName("");
   }
 
   return (
@@ -100,7 +107,7 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
 
         <button
           type="submit"
-          disabled={disabled}
+          disabled={disabled || isInvalid}
           className="sm:col-span-2 lg:col-span-4 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-emerald-500 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-sm dark:bg-emerald-500 dark:hover:bg-emerald-400"
         >
           <Plus className="h-4 w-4" />

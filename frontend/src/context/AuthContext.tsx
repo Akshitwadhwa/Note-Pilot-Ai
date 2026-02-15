@@ -10,7 +10,7 @@ type AuthContextValue = {
   userEmail: string | undefined;
   userId: string;
   signIn: (payload: { email: string; password: string }) => Promise<void>;
-  signUp: (payload: { email: string; password: string }) => Promise<void>;
+  signUp: (payload: { email: string; password: string; name?: string }) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -30,11 +30,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     let mounted = true;
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setAuthReady(true);
-    });
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setSession(data.session);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setAuthReady(true);
+      });
 
     const {
       data: { subscription }
@@ -55,9 +60,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (error) throw error;
   }
 
-  async function signUp({ email, password }: { email: string; password: string }) {
+  async function signUp({ email, password, name }: { email: string; password: string; name?: string }) {
     if (!supabase) throw new Error(supabaseConfigError ?? "Supabase is not configured");
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name
+        }
+      }
+    });
     if (error) throw error;
   }
 
