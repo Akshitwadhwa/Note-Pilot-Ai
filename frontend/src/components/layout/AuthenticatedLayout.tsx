@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, Navigate } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -51,10 +51,21 @@ const navItems = [
 ];
 
 export function AuthenticatedLayout() {
-  const { userReady, userEmail, signOut } = useAuth();
+  const { userReady, userEmail, signOut, authReady } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  if (!authReady) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <p className="text-sm text-slate-500 dark:text-slate-400">Checking session...</p>
+      </div>
+    );
+  }
+
+  if (!userReady) {
+    return <Navigate to="/auth" replace />;
+  }
   const initial = userEmail?.charAt(0).toUpperCase() ?? "U";
 
   return (
