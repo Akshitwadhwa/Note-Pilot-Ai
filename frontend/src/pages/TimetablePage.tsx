@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { CalendarDays } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -26,7 +27,13 @@ export function TimetablePage() {
       addToast("Class added to timetable!", "success");
     },
     onError: (error) => {
-      addToast((error as Error).message || "Failed to add entry", "error");
+      const errorMessage = axios.isAxiosError(error)
+        ? ((error.response?.data as { error?: string } | undefined)?.error ??
+          error.message ??
+          "Failed to add entry")
+        : (error as Error).message || "Failed to add entry";
+
+      addToast(errorMessage, "error");
     }
   });
 
