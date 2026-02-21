@@ -54,6 +54,7 @@ export function AuthenticatedLayout() {
   const { userReady, userEmail, signOut, authReady } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   if (!authReady) {
     return (
@@ -64,9 +65,18 @@ export function AuthenticatedLayout() {
   }
 
   if (!userReady) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to={loggingOut ? "/logout" : "/auth"} replace />;
   }
   const initial = userEmail?.charAt(0).toUpperCase() ?? "U";
+
+  async function handleSignOut() {
+    setLoggingOut(true);
+    try {
+      await signOut();
+    } catch {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
@@ -140,8 +150,9 @@ export function AuthenticatedLayout() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Student</p>
               </div>
               <button
-                onClick={() => void signOut()}
-                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950 dark:hover:text-rose-400"
+                onClick={() => void handleSignOut()}
+                disabled={loggingOut}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-rose-950 dark:hover:text-rose-400"
                 title="Sign out"
               >
                 <LogOut className="h-4 w-4" />
