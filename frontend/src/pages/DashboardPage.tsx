@@ -76,7 +76,7 @@ export function DashboardPage() {
             <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Dashboard</h1>
           </div>
           <p className="text-slate-500 dark:text-slate-400 ml-1">
-            Welcome back, here's your academic overview.
+            Welcome back, here's your academic progress.
           </p>
         </div>
       </header>
@@ -95,7 +95,7 @@ export function DashboardPage() {
         {/* Main Content Area: Notes taking takes precedence during class */}
         <div className="lg:col-span-7 space-y-6">
           <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Smart Notes</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Your Summarized Notes</h2>
             <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900/50 dark:text-indigo-300">AI Enabled</span>
           </div>
           <NoteComposer
