@@ -1,10 +1,13 @@
-import { DayOfWeek } from "@prisma/client";
 import { z } from "zod";
 
 const hhmmRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+const DayOfWeekEnum = z.enum([
+  "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
+]);
+
 export const createTimetableSchema = z.object({
-  dayOfWeek: z.nativeEnum(DayOfWeek),
+  dayOfWeek: DayOfWeekEnum,
   startTime: z.string().regex(hhmmRegex, "startTime must be HH:mm"),
   endTime: z.string().regex(hhmmRegex, "endTime must be HH:mm"),
   subjectName: z.string().min(1).max(120)

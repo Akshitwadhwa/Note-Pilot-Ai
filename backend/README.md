@@ -11,12 +11,14 @@
    - `cp .env.example .env`
 2. Update `.env`:
    - `DATABASE_URL`
+   - `DIRECT_URL` (recommended for Prisma schema push/migrations)
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `OPENAI_API_KEY`
    - Use your real database password in `DATABASE_URL` (do not keep `[YOUR-PASSWORD]`).
    - If the password contains special characters (`@`, `:`, `/`, `#`, `%`), URL-encode it.
-   - For Supabase URLs, include `?sslmode=require` (backend also auto-adds this when missing).
+   - For Supabase URLs, include `?sslmode=require`.
+   - Use pooler URL in `DATABASE_URL` and direct DB URL in `DIRECT_URL`.
 3. Install and generate Prisma client:
    - `npm install`
    - `npm run prisma:generate`

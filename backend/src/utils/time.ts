@@ -1,13 +1,13 @@
-import { DayOfWeek } from "@prisma/client";
+type DayOfWeek = "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY";
 
 const dayMap: DayOfWeek[] = [
-  DayOfWeek.SUNDAY,
-  DayOfWeek.MONDAY,
-  DayOfWeek.TUESDAY,
-  DayOfWeek.WEDNESDAY,
-  DayOfWeek.THURSDAY,
-  DayOfWeek.FRIDAY,
-  DayOfWeek.SATURDAY
+  "SUNDAY",
+  "MONDAY",
+  "TUESDAY",
+  "WEDNESDAY",
+  "THURSDAY",
+  "FRIDAY",
+  "SATURDAY"
 ];
 
 export function toHHMM(date: Date): string {
