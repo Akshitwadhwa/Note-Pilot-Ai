@@ -14,11 +14,15 @@
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `OPENAI_API_KEY`
+   - Use your real database password in `DATABASE_URL` (do not keep `[YOUR-PASSWORD]`).
+   - If the password contains special characters (`@`, `:`, `/`, `#`, `%`), URL-encode it.
+   - For Supabase URLs, include `?sslmode=require` (backend also auto-adds this when missing).
 3. Install and generate Prisma client:
    - `npm install`
    - `npm run prisma:generate`
 4. Run migrations:
    - `npm run prisma:migrate`
+   - If you have no migration files in this repo, run `npx prisma db push` once to create tables in your configured database.
 5. Start server:
    - `npm run dev`
 

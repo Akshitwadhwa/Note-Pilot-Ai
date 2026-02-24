@@ -33,8 +33,12 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
       return;
     }
 
-    await onCreate({ dayOfWeek, startTime, endTime, subjectName: trimmedSubjectName });
-    setSubjectName("");
+    try {
+      await onCreate({ dayOfWeek, startTime, endTime, subjectName: trimmedSubjectName });
+      setSubjectName("");
+    } catch {
+      // Mutation-level handlers already surface API errors via toast.
+    }
   }
 
   return (

@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { logger } from "../utils/logger";
 
 export class AppError extends Error {
   statusCode: number;
@@ -18,6 +19,10 @@ export function errorMiddleware(
 ): void {
   const statusCode = err instanceof AppError ? err.statusCode : 500;
   const message = err.message || "Internal Server Error";
+
+  if (statusCode >= 500) {
+    logger.error(err);
+  }
 
   res.status(statusCode).json({
     success: false,

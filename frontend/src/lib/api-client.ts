@@ -2,8 +2,16 @@ import axios from "axios";
 
 import { supabase } from "./supabase";
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const useDevProxy =
+  import.meta.env.DEV &&
+  (!configuredApiBaseUrl ||
+    configuredApiBaseUrl.includes("localhost") ||
+    configuredApiBaseUrl.includes("127.0.0.1"));
+const apiBaseUrl = useDevProxy ? "/api" : configuredApiBaseUrl || "/api";
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api",
+  baseURL: apiBaseUrl,
   headers: {
     "Content-Type": "application/json"
   }
