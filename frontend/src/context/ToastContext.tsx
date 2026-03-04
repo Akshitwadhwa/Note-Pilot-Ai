@@ -20,11 +20,18 @@ export function ToastProvider({ children }: PropsWithChildren) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = useCallback((message: string, type: ToastType = "info") => {
-    const id = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    // Deduplicate: skip if an identical message is already visible
+    setToasts((prev) => {
+      if (prev.some((t) => t.message === message && t.type === type)) {
+        return prev;
+      }
+      const id = crypto.randomUUID();
+      const next = [...prev, { id, message, type }];
+      setTimeout(() => {
+        setToasts((p) => p.filter((t) => t.id !== id));
+      }, 4000);
+      return next;
+    });
   }, []);
 
   const removeToast = useCallback((id: string) => {

@@ -36,6 +36,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!mounted) return;
         setSession(data.session);
       })
+      .catch(() => {
+        // Supabase unreachable (paused project, DNS failure, etc.)
+        console.warn("[Auth] Could not reach Supabase — continuing without session.");
+      })
       .finally(() => {
         if (!mounted) return;
         setAuthReady(true);

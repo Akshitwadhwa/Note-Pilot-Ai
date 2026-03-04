@@ -11,7 +11,14 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1
+      retry: (failureCount, error) => {
+        // Don't retry on network / abort errors — they'll just keep failing
+        const msg = (error as Error)?.message ?? "";
+        if (msg.includes("aborted") || msg.includes("Network Error") || msg.includes("Cannot connect")) {
+          return false;
+        }
+        return failureCount < 1;
+      }
     }
   }
 });
