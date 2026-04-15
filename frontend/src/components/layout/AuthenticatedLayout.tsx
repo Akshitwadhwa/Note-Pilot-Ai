@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   FileText,
+  History,
   LogOut,
   Menu,
   X,
@@ -47,7 +48,8 @@ function LiveClock() {
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/timetable", label: "Timetable", icon: CalendarDays },
-  { to: "/notes", label: "Notes", icon: FileText }
+  { to: "/notes", label: "Notes", icon: FileText },
+  { to: "/past-notes", label: "Past Notes", icon: History }
 ];
 
 export function AuthenticatedLayout() {
