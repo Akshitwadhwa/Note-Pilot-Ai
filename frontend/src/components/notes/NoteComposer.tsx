@@ -30,8 +30,8 @@ export function NoteComposer({ activeClass, notes, onCreateNote, onSummarize }: 
 
   return (
     <Card
-      title="Notes + AI Summary"
-      titleIcon={<FileText className="h-5 w-5 text-sky-500" />}
+      title="Class Notes"
+      titleIcon={<FileText className="h-5 w-5 text-teal-700 dark:text-teal-300" />}
     >
       {!activeClass ? (
         <div className="flex flex-col items-center py-8 text-center">
@@ -51,11 +51,11 @@ export function NoteComposer({ activeClass, notes, onCreateNote, onSummarize }: 
               onChange={(event) => setContent(event.target.value)}
               rows={5}
               placeholder={`Write notes for ${activeClass.subjectName}...`}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-all duration-200 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-400 dark:focus:ring-sky-400/20"
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15"
             />
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-700 hover:shadow-md active:scale-[0.98] dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow-md active:scale-[0.98] dark:bg-teal-700 dark:text-white dark:hover:bg-teal-600"
             >
               <Save className="h-4 w-4" />
               Save Note
@@ -83,7 +83,7 @@ export function NoteComposer({ activeClass, notes, onCreateNote, onSummarize }: 
                     {note.content}
                   </p>
                   {note.summary ? (
-                    <div className="mt-3 flex gap-2 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950/50">
+                    <div className="mt-3 flex gap-2 rounded-2xl bg-emerald-50 p-3 dark:bg-emerald-950/50">
                       <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                       <p className="text-sm text-emerald-900 dark:text-emerald-200">
                         {note.summary}
@@ -93,10 +93,10 @@ export function NoteComposer({ activeClass, notes, onCreateNote, onSummarize }: 
                     <button
                       type="button"
                       onClick={() => void onSummarize(note.id)}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-teal-600 dark:bg-teal-600 dark:hover:bg-teal-500"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
-                      Generate Summary
+                      Create Summary
                     </button>
                   )}
                 </article>

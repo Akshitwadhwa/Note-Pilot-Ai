@@ -12,9 +12,9 @@ export function Card({ className, title, titleIcon, children, interactive = true
   return (
     <section
       className={clsx(
-        "rounded-2xl border p-5 shadow-sm animate-fade-in-up",
-        "border-slate-200/60 bg-white/80 backdrop-blur-sm",
-        "dark:border-slate-800/60 dark:bg-slate-900/80 dark:shadow-slate-900/20",
+        "animate-fade-in-up rounded-[28px] border p-6 shadow-[var(--app-shadow)]",
+        "border-[color:var(--app-border)] bg-[color:var(--app-surface)] backdrop-blur-xl",
+        "dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]",
         interactive && "interactive-card",
         className
       )}

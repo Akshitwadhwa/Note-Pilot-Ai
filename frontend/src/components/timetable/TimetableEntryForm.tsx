@@ -27,7 +27,7 @@ const DAY_SHORT: Record<DayOfWeek, string> = {
 };
 
 const inputClasses =
-  "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-all duration-200 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-400 dark:focus:ring-sky-400/20 disabled:opacity-50 disabled:cursor-not-allowed";
+  "w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15 disabled:cursor-not-allowed disabled:opacity-50";
 
 export function TimetableEntryForm({ disabled, onCreate }: Props) {
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>("MONDAY");
@@ -50,11 +50,11 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white via-white to-sky-50/40 p-6 shadow-sm animate-fade-in-up dark:border-slate-800/60 dark:from-slate-900/80 dark:via-slate-900/80 dark:to-sky-950/20 dark:shadow-slate-900/20">
+    <section className="animate-fade-in-up rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-6 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
       {/* Header */}
       <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-indigo-500 shadow-md shadow-sky-500/20">
-          <Plus className="h-5 w-5 text-white" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-stone-200 text-slate-800 dark:bg-slate-800 dark:text-slate-100">
+          <Plus className="h-5 w-5" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Add Class</h2>
@@ -77,10 +77,10 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
                 disabled={disabled}
                 onClick={() => setDayOfWeek(day)}
                 className={clsx(
-                  "rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed",
+                  "rounded-2xl px-4 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50",
                   dayOfWeek === day
-                    ? "bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-md shadow-sky-500/25 scale-[1.02]"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    ? "scale-[1.02] bg-slate-900 text-white shadow-md dark:bg-teal-700"
+                    : "bg-stone-100 text-slate-600 hover:bg-stone-200 hover:text-slate-800 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                 )}
               >
                 <span className="hidden sm:inline">{day.charAt(0) + day.slice(1).toLowerCase()}</span>
@@ -147,8 +147,8 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Preview */}
           {trimmedSubjectName && (
-            <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400 animate-fade-in">
-              <span className="font-semibold text-sky-600 dark:text-sky-400">{DAY_SHORT[dayOfWeek]}</span>
+            <div className="animate-fade-in flex items-center gap-2 rounded-2xl bg-stone-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+              <span className="font-semibold text-teal-800 dark:text-teal-300">{DAY_SHORT[dayOfWeek]}</span>
               <span className="text-slate-400 dark:text-slate-600">|</span>
               <span>{startTime}</span>
               <ArrowRight className="h-3 w-3 text-slate-400" />
@@ -162,9 +162,9 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
             type="submit"
             disabled={disabled || isInvalid}
             className={clsx(
-              "group/btn ml-auto inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-all duration-200",
-              "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.97]",
-              "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-md disabled:from-emerald-500 disabled:to-teal-500"
+              "group/btn ml-auto inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-md transition-all duration-200",
+              "bg-slate-900 hover:bg-slate-800 active:scale-[0.97] dark:bg-teal-700 dark:hover:bg-teal-600",
+              "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-md"
             )}
           >
             <Plus className="h-4 w-4 transition-transform group-hover/btn:rotate-90" />

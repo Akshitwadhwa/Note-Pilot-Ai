@@ -19,12 +19,12 @@ import { createNote, listNotes, summarizeNote } from "../features/notes/api";
 import type { TimetableEntry, Note, DayOfWeek } from "../types/domain";
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
-  MONDAY: { bg: "bg-sky-100 dark:bg-sky-900/40", text: "text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
-  TUESDAY: { bg: "bg-violet-100 dark:bg-violet-900/40", text: "text-violet-700 dark:text-violet-300", dot: "bg-violet-500" },
-  WEDNESDAY: { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
-  THURSDAY: { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
-  FRIDAY: { bg: "bg-rose-100 dark:bg-rose-900/40", text: "text-rose-700 dark:text-rose-300", dot: "bg-rose-500" },
-  SATURDAY: { bg: "bg-orange-100 dark:bg-orange-900/40", text: "text-orange-700 dark:text-orange-300", dot: "bg-orange-500" },
+  MONDAY: { bg: "bg-teal-100 dark:bg-teal-950/40", text: "text-teal-800 dark:text-teal-200", dot: "bg-teal-600" },
+  TUESDAY: { bg: "bg-cyan-100 dark:bg-cyan-950/40", text: "text-cyan-800 dark:text-cyan-200", dot: "bg-cyan-600" },
+  WEDNESDAY: { bg: "bg-amber-100 dark:bg-amber-950/40", text: "text-amber-800 dark:text-amber-200", dot: "bg-amber-500" },
+  THURSDAY: { bg: "bg-emerald-100 dark:bg-emerald-950/40", text: "text-emerald-800 dark:text-emerald-200", dot: "bg-emerald-600" },
+  FRIDAY: { bg: "bg-rose-100 dark:bg-rose-950/40", text: "text-rose-800 dark:text-rose-200", dot: "bg-rose-500" },
+  SATURDAY: { bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-800 dark:text-orange-200", dot: "bg-orange-500" },
   SUNDAY: { bg: "bg-slate-100 dark:bg-slate-800/60", text: "text-slate-600 dark:text-slate-400", dot: "bg-slate-400" },
 };
 
@@ -104,7 +104,7 @@ export function PastNotesPage() {
       {/* Page Header */}
       <div>
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/20">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 shadow-[0_20px_36px_-28px_rgba(15,23,42,0.9)] dark:bg-amber-900">
             <History className="h-6 w-6 text-white" />
           </div>
           <div>
@@ -121,7 +121,7 @@ export function PastNotesPage() {
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left: Class Selector */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/80">
+          <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] backdrop-blur-sm dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <CalendarDays className="h-4 w-4" />
               Select a Class
@@ -135,7 +135,7 @@ export function PastNotesPage() {
                 placeholder="Search classes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 transition-all focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-400"
+                className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-stone-400 transition-all focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40"
               />
             </div>
 
@@ -169,10 +169,10 @@ export function PastNotesPage() {
                         setNoteContent("");
                       }}
                       className={clsx(
-                        "w-full rounded-xl border p-3 text-left transition-all duration-200",
+                        "w-full rounded-2xl border p-3 text-left transition-all duration-200",
                         isSelected
-                          ? "border-sky-500/50 bg-sky-50 shadow-sm dark:border-sky-500/30 dark:bg-sky-950/30"
-                          : "border-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800/50"
+                          ? "border-teal-700/20 bg-teal-50/80 shadow-sm dark:border-teal-400/30 dark:bg-teal-950/20"
+                          : "border-transparent hover:border-stone-200 hover:bg-stone-50 dark:hover:border-slate-700 dark:hover:bg-slate-800/50"
                       )}
                     >
                       <div className="flex items-center gap-2.5">
@@ -190,7 +190,7 @@ export function PastNotesPage() {
                           </div>
                         </div>
                         {isSelected && (
-                          <div className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
+                          <div className="h-1.5 w-1.5 rounded-full bg-teal-600 animate-pulse dark:bg-teal-300" />
                         )}
                       </div>
                     </button>
@@ -204,7 +204,7 @@ export function PastNotesPage() {
         {/* Right: Notes Area */}
         <div className="lg:col-span-8 space-y-5">
           {!selectedEntry ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center dark:border-slate-700">
+            <div className="rounded-[28px] border-2 border-dashed border-stone-200 p-12 text-center dark:border-slate-700">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
                 <FileText className="h-8 w-8 text-slate-400 dark:text-slate-500" />
               </div>
@@ -218,11 +218,11 @@ export function PastNotesPage() {
           ) : (
             <>
               {/* Selected class info */}
-              <div className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-white via-white to-sky-50/30 p-5 shadow-sm dark:border-slate-800/60 dark:from-slate-900/80 dark:via-slate-900/80 dark:to-sky-950/10">
+              <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
                 <div className="flex items-center gap-3">
                   <div
                     className={clsx(
-                      "flex h-10 w-10 items-center justify-center rounded-xl",
+                      "flex h-10 w-10 items-center justify-center rounded-2xl",
                       DAY_COLORS[selectedEntry.dayOfWeek].bg
                     )}
                   >
@@ -248,9 +248,9 @@ export function PastNotesPage() {
               </div>
 
               {/* Note composer */}
-              <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/80">
+              <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] backdrop-blur-sm dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  <FileText className="h-4 w-4 text-sky-500" />
+                  <FileText className="h-4 w-4 text-teal-700 dark:text-teal-300" />
                   Add Note
                 </h3>
                 <textarea
@@ -258,7 +258,7 @@ export function PastNotesPage() {
                   onChange={(e) => setNoteContent(e.target.value)}
                   rows={4}
                   placeholder={`Write notes for ${selectedEntry.subjectName}...`}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-all duration-200 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-sky-400 dark:focus:ring-sky-400/20"
+                  className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15"
                 />
                 <div className="mt-3 flex justify-end">
                   <button
@@ -267,7 +267,7 @@ export function PastNotesPage() {
                     disabled={
                       !noteContent.trim() || createNoteMutation.isPending
                     }
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:from-emerald-400 hover:to-teal-400 hover:shadow-lg active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:bg-slate-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
                   >
                     <Save className="h-4 w-4" />
                     {createNoteMutation.isPending ? "Saving..." : "Save Note"}
@@ -276,7 +276,7 @@ export function PastNotesPage() {
               </div>
 
               {/* Existing notes */}
-              <div className="rounded-2xl border border-slate-200/60 bg-white/80 p-5 shadow-sm backdrop-blur-sm dark:border-slate-800/60 dark:bg-slate-900/80">
+              <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] backdrop-blur-sm dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
                 <h3 className="mb-4 flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                     <History className="h-4 w-4 text-amber-500" />
@@ -306,7 +306,7 @@ export function PastNotesPage() {
                     {notesQuery.data.map((note: Note) => (
                       <article
                         key={note.id}
-                        className="rounded-xl border border-slate-200/60 p-4 transition-colors hover:border-slate-300 dark:border-slate-700/60 dark:hover:border-slate-600"
+                        className="rounded-2xl border border-stone-200/80 p-4 transition-colors hover:border-stone-300 dark:border-slate-700/60 dark:hover:border-slate-600"
                       >
                         <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
                           {note.content}
@@ -317,7 +317,7 @@ export function PastNotesPage() {
                           </p>
                         )}
                         {note.summary ? (
-                          <div className="mt-3 flex gap-2 rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950/50">
+                          <div className="mt-3 flex gap-2 rounded-2xl bg-emerald-50 p-3 dark:bg-emerald-950/50">
                             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                             <p className="text-sm text-emerald-900 dark:text-emerald-200">
                               {note.summary}
@@ -328,12 +328,12 @@ export function PastNotesPage() {
                             type="button"
                             onClick={() => void summarizeMutation.mutateAsync(note.id)}
                             disabled={summarizeMutation.isPending}
-                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:from-sky-400 hover:to-indigo-400 hover:shadow-md active:scale-[0.97] disabled:opacity-50"
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.97] disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-500"
                           >
                             <Sparkles className="h-3.5 w-3.5" />
                             {summarizeMutation.isPending
                               ? "Generating..."
-                              : "Generate AI Summary"}
+                              : "Generate Summary"}
                           </button>
                         )}
                       </article>

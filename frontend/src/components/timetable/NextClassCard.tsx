@@ -1,4 +1,3 @@
-
 import { Calendar, Clock, ArrowRight } from "lucide-react";
 import type { TimetableEntry } from "../../types/domain";
 
@@ -29,9 +28,9 @@ export function NextClassCard({ entries }: Props) {
     const nextClass = getNextClass();
 
     return (
-        <div className="h-full rounded-3xl bg-white p-6 shadow-sm border border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col justify-between group hover:shadow-md transition-all">
+        <div className="group flex h-full flex-col justify-between rounded-[2rem] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-6 shadow-[var(--app-shadow)] transition-all hover:-translate-y-0.5 dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
             <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                <div className="rounded-xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                     <Calendar className="h-5 w-5" />
                 </div>
                 <h3 className="font-semibold text-slate-900 dark:text-slate-100">Up Next</h3>
@@ -48,13 +47,13 @@ export function NextClassCard({ entries }: Props) {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                        <Clock className="h-4 w-4 text-indigo-500" />
+                    <div className="flex items-center gap-2 rounded-2xl bg-stone-100/85 p-3 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-400">
+                        <Clock className="h-4 w-4 text-teal-700 dark:text-teal-300" />
                         <span>{nextClass.startTime} - {nextClass.endTime}</span>
                     </div>
 
                     <div className="pt-2">
-                        <button className="w-full flex items-center justify-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors group-hover:translate-x-1 duration-300">
+                        <button className="flex w-full items-center justify-center gap-2 text-sm font-medium text-teal-800 transition-colors duration-300 group-hover:translate-x-1 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200">
                             View Details <ArrowRight className="h-4 w-4" />
                         </button>
                     </div>

@@ -45,7 +45,7 @@ export function TimetablePage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-lg shadow-sky-500/20">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 shadow-[0_20px_36px_-28px_rgba(15,23,42,0.9)] dark:bg-teal-900">
               <CalendarDays className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -60,7 +60,7 @@ export function TimetablePage() {
         {/* Stats chips */}
         {totalClasses > 0 && (
           <div className="flex gap-2 animate-fade-in">
-            <div className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-stone-200/80 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               <BookOpen className="h-3 w-3" />
               {totalClasses} {totalClasses === 1 ? "class" : "classes"}
             </div>

@@ -70,13 +70,15 @@ export function DashboardPage() {
       <header className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-sky-100 rounded-xl dark:bg-sky-900/30">
-              <LayoutDashboard className="h-6 w-6 text-sky-600 dark:text-sky-400" />
+            <div className="rounded-2xl bg-teal-100 p-2.5 dark:bg-teal-950/40">
+              <LayoutDashboard className="h-6 w-6 text-teal-900 dark:text-teal-100" />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Dashboard</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              Dashboard
+            </h1>
           </div>
           <p className="text-slate-500 dark:text-slate-400 ml-1">
-            Welcome back, here's your academic progress.
+            Your schedule, notes, and current session at a glance.
           </p>
         </div>
       </header>
@@ -95,8 +97,10 @@ export function DashboardPage() {
         {/* Main Content Area: Notes taking takes precedence during class */}
         <div className="lg:col-span-7 space-y-6">
           <div className="flex items-center gap-2 mb-2">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Your Summarized Notes</h2>
-            <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold dark:bg-indigo-900/50 dark:text-indigo-300">AI Enabled</span>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Class Notes</h2>
+            <span className="rounded-full bg-stone-200/70 px-2.5 py-0.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              Summaries available
+            </span>
           </div>
           <NoteComposer
             activeClass={currentClassQuery.data ?? null}

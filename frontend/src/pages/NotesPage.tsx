@@ -57,11 +57,11 @@ export function NotesPage() {
     <div className="space-y-6 stagger-children">
       <div>
         <div className="flex items-center gap-2">
-          <FileText className="h-6 w-6 text-sky-500" />
+          <FileText className="h-6 w-6 text-teal-700 dark:text-teal-300" />
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Notes</h1>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Take notes for your current class and generate AI summaries
+          Capture notes for your current class and create concise summaries
         </p>
       </div>
 
