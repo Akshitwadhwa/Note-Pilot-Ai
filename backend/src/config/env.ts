@@ -44,5 +44,9 @@ export const env = {
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
   openaiApiKey: process.env.OPENAI_API_KEY ?? "",
-  openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini"
+  openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+  openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small",
+  ragExtractionProvider: process.env.RAG_EXTRACTION_PROVIDER?.trim().toLowerCase() ?? "openai",
+  huggingFaceApiKey: process.env.HUGGINGFACE_API_KEY ?? "",
+  huggingFaceExtractionModel: process.env.HUGGINGFACE_EXTRACTION_MODEL ?? ""
 };

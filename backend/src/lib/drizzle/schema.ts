@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, index, pgEnum, serial } from 'drizzle-orm/pg-core';
+import { integer, jsonb, pgEnum, pgTable, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Enums
@@ -43,6 +43,66 @@ export const timetables = pgTable(
   })
 );
 
+export const courses = pgTable(
+  'course',
+  {
+    id: text('id').primaryKey(),
+    userId: text('userId').notNull(),
+    name: text('name').notNull(),
+    normalizedName: text('normalizedName').notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIndex: index('Course_userId_idx').on(table.userId),
+    userIdNormalizedNameUnique: uniqueIndex('Course_userId_normalizedName_key').on(
+      table.userId,
+      table.normalizedName
+    ),
+  })
+);
+
+export const courseDocuments = pgTable(
+  'course_document',
+  {
+    id: text('id').primaryKey(),
+    courseId: text('courseId').notNull(),
+    userId: text('userId').notNull(),
+    fileName: text('fileName').notNull(),
+    mimeType: text('mimeType').notNull(),
+    byteSize: integer('byteSize').notNull(),
+    extractedText: text('extractedText').notNull(),
+    syllabusSummary: text('syllabusSummary'),
+    credits: text('credits'),
+    evaluationCriteria: text('evaluationCriteria'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    courseIdIndex: index('CourseDocument_courseId_idx').on(table.courseId),
+    userIdIndex: index('CourseDocument_userId_idx').on(table.userId),
+  })
+);
+
+export const courseDocumentChunks = pgTable(
+  'course_document_chunk',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('documentId').notNull(),
+    courseId: text('courseId').notNull(),
+    userId: text('userId').notNull(),
+    chunkIndex: integer('chunkIndex').notNull(),
+    content: text('content').notNull(),
+    embedding: jsonb('embedding').notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    courseIdIndex: index('CourseDocumentChunk_courseId_idx').on(table.courseId),
+    documentIdIndex: index('CourseDocumentChunk_documentId_idx').on(table.documentId),
+  })
+);
+
 export const notes = pgTable(
   'note',
   {
@@ -63,7 +123,45 @@ export const notes = pgTable(
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   timetableEntries: many(timetables),
+  courses: many(courses),
+  courseDocuments: many(courseDocuments),
+  courseDocumentChunks: many(courseDocumentChunks),
   notes: many(notes),
+}));
+
+export const coursesRelations = relations(courses, ({ one, many }) => ({
+  user: one(users, {
+    fields: [courses.userId],
+    references: [users.id],
+  }),
+  documents: many(courseDocuments),
+}));
+
+export const courseDocumentsRelations = relations(courseDocuments, ({ one, many }) => ({
+  user: one(users, {
+    fields: [courseDocuments.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [courseDocuments.courseId],
+    references: [courses.id],
+  }),
+  chunks: many(courseDocumentChunks),
+}));
+
+export const courseDocumentChunksRelations = relations(courseDocumentChunks, ({ one }) => ({
+  user: one(users, {
+    fields: [courseDocumentChunks.userId],
+    references: [users.id],
+  }),
+  course: one(courses, {
+    fields: [courseDocumentChunks.courseId],
+    references: [courses.id],
+  }),
+  document: one(courseDocuments, {
+    fields: [courseDocumentChunks.documentId],
+    references: [courseDocuments.id],
+  }),
 }));
 
 export const timetablesRelations = relations(timetables, ({ one, many }) => ({

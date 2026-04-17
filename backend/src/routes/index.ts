@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import aiRoutes from "./ai.routes";
+import coursesRoutes from "./courses.routes";
 import notesRoutes from "./notes.routes";
 import timetableRoutes from "./timetable.routes";
 import usersRoutes from "./users.routes";
@@ -12,6 +13,7 @@ router.get("/health", (_req, res) => {
 });
 
 router.use("/timetable", timetableRoutes);
+router.use("/courses", coursesRoutes);
 router.use("/notes", notesRoutes);
 router.use("/ai", aiRoutes);
 router.use("/users", usersRoutes);

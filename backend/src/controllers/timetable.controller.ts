@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from "express";
 import { AppError } from "../middleware/error.middleware";
 import {
   createTimetableEntry,
-  getCurrentActiveClass,
+  getCurrentClass as getCurrentClassAtTime,
   listTimetableEntries
 } from "../services/timetable.service";
 
@@ -35,7 +35,7 @@ export async function getCurrentClass(req: Request, res: Response, next: NextFun
       throw new AppError("userId is required", 422);
     }
 
-    const activeClass = await getCurrentActiveClass(userId);
+    const activeClass = await getCurrentClassAtTime(userId, new Date());
 
     res.json({
       success: true,
