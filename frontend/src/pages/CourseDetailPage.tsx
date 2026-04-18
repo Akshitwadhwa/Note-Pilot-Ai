@@ -156,6 +156,9 @@ export function CourseDetailPage() {
 
   const selectedNote = filteredNotes.find((note) => note.id === selectedNoteId) ?? null;
   const reviewedCount = detail.notes.filter((note) => reviewedMap[note.id]).length;
+  const totalNotes = detail.notes.length;
+  const pendingCount = Math.max(totalNotes - reviewedCount, 0);
+  const reviewProgress = totalNotes === 0 ? 0 : Math.round((reviewedCount / totalNotes) * 100);
 
   function toggleReviewed(noteId: string) {
     setReviewedMap((current) => {
@@ -166,7 +169,7 @@ export function CourseDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-7 stagger-children">
+    <div className="mx-auto max-w-6xl space-y-6 stagger-children">
       <div className="space-y-4">
         <Link
           to="/courses"
@@ -177,27 +180,41 @@ export function CourseDetailPage() {
         </Link>
 
         <section className="overflow-hidden rounded-[32px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
-          <div className="relative border-b border-[color:var(--app-border)] bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.28),transparent_30%),linear-gradient(135deg,#0f172a,#111827_48%,#0f766e)] px-6 py-8 text-white">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/80 uppercase">
-                <BookMarked className="h-3.5 w-3.5" />
-                Course Notes
+          <div className="relative border-b border-[color:var(--app-border)] bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.28),transparent_30%),linear-gradient(135deg,#0f172a,#111827_50%,#0f766e)] px-6 py-8 text-white">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold tracking-[0.18em] text-white/80 uppercase">
+                  <BookMarked className="h-3.5 w-3.5" />
+                  Course Workspace
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight">{detail.course.name}</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80">
+                  Review notes, inspect class slots, and track your progress from one place.
+                </p>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight">{detail.course.name}</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80">
-                Open a note to review the full content, mark it as reviewed, and track which class
-                slot it came from.
-              </p>
+
+              <div className="min-w-[14rem] rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                  Review Progress
+                </p>
+                <p className="mt-2 text-3xl font-bold">{reviewProgress}%</p>
+                <div className="mt-3 h-2 rounded-full bg-white/20">
+                  <div
+                    className="h-2 rounded-full bg-emerald-300 transition-all"
+                    style={{ width: `${reviewProgress}%` }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid gap-3 px-6 py-5 sm:grid-cols-3">
+          <div className="grid gap-3 px-6 py-5 sm:grid-cols-4">
             <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Notes
               </p>
               <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
-                {detail.notes.length}
+                {totalNotes}
               </p>
             </div>
             <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
@@ -206,6 +223,14 @@ export function CourseDetailPage() {
               </p>
               <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
                 {reviewedCount}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                Pending
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+                {pendingCount}
               </p>
             </div>
             <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
@@ -220,164 +245,145 @@ export function CourseDetailPage() {
         </section>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.85fr]">
-        <section className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
-          <div className="flex flex-col gap-4">
-            <div>
+      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <section className="space-y-5">
+          <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
+            <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-teal-700 dark:text-teal-300" />
-                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Notes</h2>
-              </div>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Database-style course notes with quick review tracking.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="inline-flex rounded-2xl bg-stone-100 p-1 dark:bg-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setView("all")}
-                  className={clsx(
-                    "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
-                    view === "all"
-                      ? "bg-slate-900 text-white dark:bg-teal-700"
-                      : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
-                  )}
-                >
-                  All notes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("review")}
-                  className={clsx(
-                    "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
-                    view === "review"
-                      ? "bg-slate-900 text-white dark:bg-teal-700"
-                      : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
-                  )}
-                >
-                  Notes to review
-                </button>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Course Notes</h2>
               </div>
 
-              <label className="relative block lg:w-72">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search notes or materials"
-                  className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-stone-400 transition-all focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40"
-                />
-              </label>
-            </div>
-          </div>
+              <div className="flex flex-col gap-3">
+                <div className="inline-flex rounded-2xl bg-stone-100 p-1 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setView("all")}
+                    className={clsx(
+                      "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                      view === "all"
+                        ? "bg-slate-900 text-white dark:bg-teal-700"
+                        : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+                    )}
+                  >
+                    All notes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView("review")}
+                    className={clsx(
+                      "rounded-xl px-4 py-2 text-sm font-medium transition-colors",
+                      view === "review"
+                        ? "bg-slate-900 text-white dark:bg-teal-700"
+                        : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+                    )}
+                  >
+                    To review
+                  </button>
+                </div>
 
-          {filteredNotes.length === 0 ? (
-            <div className="mt-6 rounded-[24px] border-2 border-dashed border-stone-300 p-10 text-center dark:border-slate-700">
-              <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
-                No notes match this view
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Create notes from the Notes or Past Notes pages and they will appear here.
-              </p>
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search notes or materials"
+                    className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-stone-400 transition-all focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40"
+                  />
+                </label>
+              </div>
             </div>
-          ) : (
-            <div className="mt-6 overflow-hidden rounded-[24px] border border-[color:var(--app-border)]">
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse text-left">
-                  <thead className="bg-stone-100/80 dark:bg-slate-800/80">
-                    <tr className="text-sm text-slate-600 dark:text-slate-300">
-                      <th className="w-28 px-4 py-3 font-semibold">Reviewed</th>
-                      <th className="px-4 py-3 font-semibold">Name</th>
-                      <th className="w-32 px-4 py-3 font-semibold">Type</th>
-                      <th className="w-56 px-4 py-3 font-semibold">Materials</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredNotes.map((note, index) => {
-                      const reviewed = Boolean(reviewedMap[note.id]);
-                      const isSelected = note.id === selectedNoteId;
 
-                      return (
-                        <tr
-                          key={note.id}
-                          onClick={() => setSelectedNoteId(note.id)}
-                          className={clsx(
-                            "cursor-pointer border-t border-[color:var(--app-border)] transition-colors",
-                            isSelected
-                              ? "bg-slate-900/[0.04] dark:bg-teal-400/[0.08]"
-                              : "hover:bg-stone-50 dark:hover:bg-slate-800/50"
-                          )}
-                        >
-                          <td className="px-4 py-3 align-top">
-                            <label
-                              className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={reviewed}
-                                onChange={() => toggleReviewed(note.id)}
-                                className="h-5 w-5 rounded border-stone-300 text-teal-700 focus:ring-teal-700/30 dark:border-slate-600 dark:bg-slate-900 dark:text-teal-400"
-                              />
-                              <span>{reviewed ? "Done" : "Pending"}</span>
-                            </label>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            <div className="flex items-start gap-3">
-                              <div
-                                className={clsx(
-                                  "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
-                                  isSelected
-                                    ? "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-100"
-                                    : "bg-stone-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                                )}
+            {filteredNotes.length === 0 ? (
+              <div className="mt-6 rounded-[24px] border-2 border-dashed border-stone-300 p-10 text-center dark:border-slate-700">
+                <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+                  No notes match this view
+                </p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Create notes from the Notes or Past Notes pages and they will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-6 overflow-hidden rounded-[24px] border border-slate-700 bg-[#0f1115]">
+                <div className="max-h-[30rem] overflow-y-auto">
+                  <table className="w-full border-collapse text-left">
+                    <thead className="sticky top-0 z-10 border-b border-slate-700 bg-[#11141b]">
+                      <tr className="text-sm font-semibold text-slate-300">
+                        <th className="w-36 border-r border-slate-700 px-4 py-3">
+                          <span className="inline-flex items-center gap-2">
+                            <CheckSquare2 className="h-4 w-4" />
+                            Reviewed
+                          </span>
+                        </th>
+                        <th className="border-r border-slate-700 px-4 py-3">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-base font-bold text-slate-400">Aa</span>
+                            Name
+                          </span>
+                        </th>
+                        <th className="w-44 px-4 py-3">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredNotes.map((note, index) => {
+                        const reviewed = Boolean(reviewedMap[note.id]);
+                        const isSelected = note.id === selectedNoteId;
+
+                        return (
+                          <tr
+                            key={note.id}
+                            onClick={() => setSelectedNoteId(note.id)}
+                            className={clsx(
+                              "cursor-pointer border-b border-slate-700/80 transition-colors",
+                              isSelected
+                                ? "bg-blue-950/30"
+                                : "bg-[#0f1115] hover:bg-slate-900/70"
+                            )}
+                          >
+                            <td className="border-r border-slate-700 px-4 py-3 align-middle">
+                              <label
+                                className="inline-flex items-center"
+                                onClick={(event) => event.stopPropagation()}
                               >
-                                <FileText className="h-4 w-4" />
-                              </div>
+                                <input
+                                  type="checkbox"
+                                  checked={reviewed}
+                                  onChange={() => toggleReviewed(note.id)}
+                                  className="h-8 w-8 rounded-md border border-slate-500 bg-transparent text-blue-500 focus:ring-2 focus:ring-blue-500/40"
+                                />
+                              </label>
+                            </td>
+
+                            <td className="border-r border-slate-700 px-4 py-3 align-middle">
                               <div className="min-w-0">
-                                <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                                <p className="truncate text-[22px] font-semibold leading-tight text-slate-100">
                                   {buildNoteTitle(note, index)}
                                 </p>
-                                <p className="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">
-                                  {note.content}
+                                <p className="mt-1 truncate text-xs text-slate-400">
+                                  {buildMaterialsLabel(note)} | {formatTimestamp(note.timestamp)}
                                 </p>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            <span className="inline-flex rounded-full bg-fuchsia-100 px-3 py-1 text-xs font-semibold text-fuchsia-900 dark:bg-fuchsia-950/50 dark:text-fuchsia-100">
-                              Lecture
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            <div className="space-y-2">
-                              <span className="inline-flex rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                {buildMaterialsLabel(note)}
-                              </span>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {formatTimestamp(note.timestamp)}
-                              </p>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </section>
+                            </td>
 
-        <aside className="space-y-5">
+                            <td className="px-4 py-3 align-middle">
+                              <span className="inline-flex rounded-lg bg-fuchsia-300/65 px-3 py-1 text-sm font-semibold text-fuchsia-950">
+                                Lecture
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
           <section className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
             <div className="mb-4 flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-teal-700 dark:text-teal-300" />
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Course Materials
-              </h2>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Class Slots</h2>
             </div>
 
             {detail.timetableEntries.length === 0 ? (
@@ -387,10 +393,7 @@ export function CourseDetailPage() {
             ) : (
               <div className="space-y-2.5">
                 {detail.timetableEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/75"
-                  >
+                  <div key={entry.id} className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/75">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                         {formatDay(entry.dayOfWeek)}
@@ -400,83 +403,80 @@ export function CourseDetailPage() {
                         {entry.startTime} - {entry.endTime}
                       </div>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {entry.subjectName}
-                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{entry.subjectName}</p>
                   </div>
                 ))}
               </div>
             )}
           </section>
+        </section>
 
-          <section className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
-            <div className="mb-4 flex items-center gap-2">
-              <CheckSquare2 className="h-5 w-5 text-teal-700 dark:text-teal-300" />
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Note Viewer
-              </h2>
+        <aside className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
+          <div className="mb-4 flex items-center gap-2">
+            <CheckSquare2 className="h-5 w-5 text-teal-700 dark:text-teal-300" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Selected Note</h2>
+          </div>
+
+          {!selectedNote ? (
+            <div className="rounded-2xl border-2 border-dashed border-stone-300 p-8 text-center dark:border-slate-700">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">Select a note to read it</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Note content and AI summary will appear here.
+              </p>
             </div>
-
-            {!selectedNote ? (
-              <div className="rounded-2xl border-2 border-dashed border-stone-300 p-8 text-center dark:border-slate-700">
-                <p className="font-semibold text-slate-700 dark:text-slate-300">
-                  Select a note to read it
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Your note content and AI summary will appear here.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="rounded-2xl bg-stone-100/80 p-4 dark:bg-slate-800/75">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                        {buildNoteTitle(
-                          selectedNote,
-                          detail.notes.findIndex((note) => note.id === selectedNote.id)
-                        )}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                          {buildMaterialsLabel(selectedNote)}
-                        </span>
-                        <span>{formatTimestamp(selectedNote.timestamp)}</span>
-                      </div>
-                    </div>
-                    <span
-                      className={clsx(
-                        "rounded-full px-3 py-1 text-xs font-semibold",
-                        reviewedMap[selectedNote.id]
-                          ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100"
-                          : "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl bg-stone-100/80 p-4 dark:bg-slate-800/75">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                      {buildNoteTitle(
+                        selectedNote,
+                        detail.notes.findIndex((note) => note.id === selectedNote.id)
                       )}
-                    >
-                      {reviewedMap[selectedNote.id] ? "Reviewed" : "Needs review"}
-                    </span>
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                        {buildMaterialsLabel(selectedNote)}
+                      </span>
+                      <span>{formatTimestamp(selectedNote.timestamp)}</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rounded-2xl border border-stone-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-900/60">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                    Written Notes
-                  </p>
-                  <div className="max-h-[20rem] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">
-                    {selectedNote.content}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-stone-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-900/60">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                    AI Summary
-                  </p>
-                  <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">
-                    {selectedNote.summary || "No AI summary generated yet for this note."}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => toggleReviewed(selectedNote.id)}
+                    className={clsx(
+                      "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+                      reviewedMap[selectedNote.id]
+                        ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-100"
+                        : "bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-950/60 dark:text-amber-100"
+                    )}
+                  >
+                    {reviewedMap[selectedNote.id] ? "Mark pending" : "Mark reviewed"}
+                  </button>
                 </div>
               </div>
-            )}
-          </section>
+
+              <div className="rounded-2xl border border-stone-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-900/60">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  Full Note
+                </p>
+                <div className="max-h-[18rem] overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-200">
+                  {selectedNote.content}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-stone-200/80 bg-white/70 p-4 dark:border-slate-700/70 dark:bg-slate-900/60">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  AI Summary
+                </p>
+                <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">
+                  {selectedNote.summary || "No AI summary generated yet for this note."}
+                </p>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>
