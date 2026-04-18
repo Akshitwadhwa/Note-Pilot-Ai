@@ -5,10 +5,23 @@ export const createNoteSchema = z.object({
   content: z.string().min(1).max(10000)
 });
 
+export const updateNoteSchema = z.object({
+  content: z.string().min(1).max(10000)
+});
+
+export const noteParamsSchema = z.object({
+  noteId: z.string().min(1)
+});
+
 export const summarizeTextSchema = z.object({
   text: z.string().min(1).max(20000)
 });
 
 export const summarizeNoteSchema = z.object({
   noteId: z.string().min(1)
+});
+
+export const assistNoteSchema = z.object({
+  noteId: z.string().min(1),
+  question: z.string().trim().min(1).max(2000)
 });

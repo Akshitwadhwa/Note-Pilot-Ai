@@ -9,6 +9,7 @@ import {
   Save,
   Sparkles,
   Search,
+  X,
 } from "lucide-react";
 import clsx from "clsx";
 import { useSearchParams } from "react-router-dom";
@@ -16,7 +17,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { listTimetableEntries } from "../features/timetable/api";
-import { createNote, listNotes, summarizeNote } from "../features/notes/api";
+import { assistNote, createNote, listNotes, summarizeNote, updateNote } from "../features/notes/api";
 import type { TimetableEntry, Note, DayOfWeek } from "../types/domain";
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
@@ -40,8 +41,13 @@ export function PastNotesPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedEntry, setSelectedEntry] = useState<TimetableEntry | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [noteContent, setNoteContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedNoteDraft, setSelectedNoteDraft] = useState("");
+  const [showAIBox, setShowAIBox] = useState(false);
+  const [aiQuestion, setAIQuestion] = useState("");
+  const [aiAnswer, setAIAnswer] = useState("");
 
   // Fetch all timetable entries
   const timetableQuery = useQuery({
@@ -80,6 +86,31 @@ export function PastNotesPage() {
     },
     onError: (error) => {
       addToast((error as Error).message || "Failed to generate summary", "error");
+    },
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ noteId, content }: { noteId: string; content: string }) => updateNote(noteId, content),
+    onSuccess: async (updatedNote) => {
+      setSelectedNote(updatedNote);
+      setSelectedNoteDraft(updatedNote.content);
+      await queryClient.invalidateQueries({
+        queryKey: ["notes", selectedEntry?.id, userId],
+      });
+      addToast("Note updated!", "success");
+    },
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to update note", "error");
+    },
+  });
+
+  const assistNoteMutation = useMutation({
+    mutationFn: ({ noteId, question }: { noteId: string; question: string }) => assistNote(noteId, question),
+    onSuccess: (result) => {
+      setAIAnswer(result.answer);
+    },
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to ask AI about this note", "error");
     },
   });
 
@@ -122,8 +153,55 @@ export function PastNotesPage() {
     }
   }, [entries, preselectedEntryId, selectedEntry, setNoteContent]);
 
+  useEffect(() => {
+    const notes = notesQuery.data ?? [];
+
+    if (!selectedEntry) {
+      if (selectedNote) {
+        setSelectedNote(null);
+      }
+      setSelectedNoteDraft("");
+      setShowAIBox(false);
+      setAIQuestion("");
+      setAIAnswer("");
+      return;
+    }
+
+    if (notes.length === 0) {
+      if (selectedNote) {
+        setSelectedNote(null);
+      }
+      setSelectedNoteDraft("");
+      return;
+    }
+
+    if (!selectedNote) return;
+
+    const refreshedNote = notes.find((note) => note.id === selectedNote.id) ?? null;
+    if (!refreshedNote) {
+      setSelectedNote(null);
+      return;
+    }
+
+    if (
+      refreshedNote.content !== selectedNote.content ||
+      refreshedNote.summary !== selectedNote.summary ||
+      refreshedNote.timestamp !== selectedNote.timestamp
+    ) {
+      setSelectedNote(refreshedNote);
+    }
+  }, [notesQuery.data, selectedEntry, selectedNote]);
+
+  useEffect(() => {
+    setSelectedNoteDraft(selectedNote?.content ?? "");
+    setShowAIBox(false);
+    setAIQuestion("");
+    setAIAnswer("");
+  }, [selectedNote?.id]);
+
   function handleSelectEntry(entry: TimetableEntry) {
     setSelectedEntry(entry);
+    setSelectedNote(null);
     setNoteContent("");
     setSearchParams({ timetableId: entry.id }, { replace: true });
   }
@@ -135,6 +213,24 @@ export function PastNotesPage() {
       content: noteContent.trim(),
     });
     setNoteContent("");
+  }
+
+  async function handleUpdateSelectedNote() {
+    if (!selectedNote || !selectedNoteDraft.trim()) return;
+
+    await updateNoteMutation.mutateAsync({
+      noteId: selectedNote.id,
+      content: selectedNoteDraft.trim()
+    });
+  }
+
+  async function handleAskAIAboutSelectedNote() {
+    if (!selectedNote || !aiQuestion.trim()) return;
+
+    await assistNoteMutation.mutateAsync({
+      noteId: selectedNote.id,
+      question: aiQuestion.trim()
+    });
   }
 
   return (
@@ -338,41 +434,44 @@ export function PastNotesPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {notesQuery.data.map((note: Note) => (
-                      <article
-                        key={note.id}
-                        className="rounded-2xl border border-stone-200/80 p-4 transition-colors hover:border-stone-300 dark:border-slate-700/60 dark:hover:border-slate-600"
-                      >
-                        <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
-                          {note.content}
-                        </p>
-                        {note.timestamp && (
-                          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                            {new Date(note.timestamp).toLocaleString()}
-                          </p>
-                        )}
-                        {note.summary ? (
-                          <div className="mt-3 flex gap-2 rounded-2xl bg-emerald-50 p-3 dark:bg-emerald-950/50">
-                            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                            <p className="text-sm text-emerald-900 dark:text-emerald-200">
-                              {note.summary}
-                            </p>
+                    {notesQuery.data.map((note: Note, index) => {
+                      const isActive = selectedNote?.id === note.id;
+                      const preview =
+                        note.content.length > 180 ? `${note.content.slice(0, 180).trim()}...` : note.content;
+
+                      return (
+                        <button
+                          key={note.id}
+                          type="button"
+                          onClick={() => setSelectedNote(note)}
+                          className={clsx(
+                            "w-full rounded-2xl border p-4 text-left transition-colors",
+                            isActive
+                              ? "border-teal-700/20 bg-teal-50/70 shadow-sm dark:border-teal-400/30 dark:bg-teal-950/20"
+                              : "border-stone-200/80 hover:border-stone-300 dark:border-slate-700/60 dark:hover:border-slate-600"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                Note {notesQuery.data.length - index}
+                              </p>
+                              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
+                                {preview}
+                              </p>
+                            </div>
+                            {isActive && (
+                              <div className="mt-1 h-2 w-2 rounded-full bg-teal-600 dark:bg-teal-300" />
+                            )}
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void summarizeMutation.mutateAsync(note.id)}
-                            disabled={summarizeMutation.isPending}
-                            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.97] disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-500"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            {summarizeMutation.isPending
-                              ? "Generating..."
-                              : "Generate Summary"}
-                          </button>
-                        )}
-                      </article>
-                    ))}
+                          {note.timestamp && (
+                            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                              {new Date(note.timestamp).toLocaleString()}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -380,6 +479,141 @@ export function PastNotesPage() {
           )}
         </div>
       </div>
+
+      {selectedNote && selectedEntry && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px]"
+            onClick={() => setSelectedNote(null)}
+          />
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-stone-200 bg-white shadow-[0_24px_80px_-30px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5 dark:border-slate-800">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                  Full Note
+                </p>
+                <h3 className="mt-2 truncate text-3xl font-semibold text-slate-900 dark:text-slate-100">
+                  {selectedEntry.subjectName}
+                </h3>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <span>{formatDay(selectedEntry.dayOfWeek)}</span>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <span>
+                    {selectedEntry.startTime} - {selectedEntry.endTime}
+                  </span>
+                  {selectedNote.timestamp && (
+                    <>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
+                      <span>{new Date(selectedNote.timestamp).toLocaleString()}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAIBox((current) => !current)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  / AI
+                </button>
+                {!selectedNote.summary && (
+                  <button
+                    type="button"
+                    onClick={() => void summarizeMutation.mutateAsync(selectedNote.id)}
+                    disabled={summarizeMutation.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-teal-600 hover:shadow-md active:scale-[0.97] disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-500"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {summarizeMutation.isPending ? "Generating..." : "Generate Summary"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedNote(null)}
+                  className="rounded-2xl border border-stone-200 p-2 text-slate-500 transition-colors hover:bg-stone-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  aria-label="Close note panel"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+              <div className="space-y-5">
+                {showAIBox && (
+                  <div className="rounded-3xl border border-stone-200 bg-stone-50/70 p-5 dark:border-slate-800 dark:bg-slate-900/60">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      Ask AI About This Note
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      <input
+                        value={aiQuestion}
+                        onChange={(event) => setAIQuestion(event.target.value)}
+                        placeholder="Ask a question about this note..."
+                        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-stone-400 focus:border-teal-700/40 focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleAskAIAboutSelectedNote()}
+                          disabled={!aiQuestion.trim() || assistNoteMutation.isPending}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
+                        >
+                          {assistNoteMutation.isPending ? "Thinking..." : "Ask AI"}
+                        </button>
+                      </div>
+                      {aiAnswer && (
+                        <div className="rounded-2xl bg-white p-4 dark:bg-slate-950">
+                          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800 dark:text-slate-200">
+                            {aiAnswer}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-3xl border border-stone-200/80 bg-stone-50/70 p-6 dark:border-slate-800 dark:bg-slate-900/60">
+                  <textarea
+                    value={selectedNoteDraft}
+                    onChange={(event) => setSelectedNoteDraft(event.target.value)}
+                    rows={16}
+                    className="min-h-[360px] w-full resize-none bg-transparent text-[15px] leading-8 text-slate-800 focus:outline-none dark:text-slate-200"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleUpdateSelectedNote()}
+                    disabled={!selectedNoteDraft.trim() || selectedNoteDraft.trim() === selectedNote.content.trim() || updateNoteMutation.isPending}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:bg-slate-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
+                  >
+                    <Save className="h-4 w-4" />
+                    {updateNoteMutation.isPending ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+
+                {selectedNote.summary && (
+                  <div className="flex gap-3 rounded-3xl bg-emerald-50 p-5 dark:bg-emerald-950/40">
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                        Summary
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-emerald-900 dark:text-emerald-100">
+                        {selectedNote.summary}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

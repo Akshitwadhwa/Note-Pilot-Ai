@@ -38,6 +38,31 @@ export async function getNoteById(noteId: string) {
   });
 }
 
+export async function getNoteByIdForUser(userId: string, noteId: string) {
+  return db.query.notes.findFirst({
+    where: and(eq(notes.id, noteId), eq(notes.userId, userId))
+  });
+}
+
+export async function updateNoteContent(userId: string, noteId: string, content: string) {
+  const note = await getNoteByIdForUser(userId, noteId);
+
+  if (!note) {
+    throw new AppError("Note not found", 404);
+  }
+
+  const result = await db
+    .update(notes)
+    .set({
+      content,
+      summary: null
+    })
+    .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+    .returning();
+
+  return result[0];
+}
+
 export async function updateNoteSummary(noteId: string, summary: string) {
   const note = await db.query.notes.findFirst({
     where: eq(notes.id, noteId)

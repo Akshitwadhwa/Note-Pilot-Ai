@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowUpDown,
   ChevronDown,
+  Loader2,
+  MessageSquareText,
   Plus,
   Search,
   SlidersHorizontal,
@@ -14,8 +16,8 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
-import { createCourse, listCourses } from "../features/courses/api";
-import type { Course } from "../types/domain";
+import { askCourseQuestion, createCourse, listCourses } from "../features/courses/api";
+import type { Course, CourseQuestionResult } from "../types/domain";
 
 type CoverStyle = {
   bannerClass: string;
@@ -116,6 +118,9 @@ export function CoursesPage() {
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [newCourseName, setNewCourseName] = useState("");
+  const [selectedAskCourseId, setSelectedAskCourseId] = useState("");
+  const [askQuestion, setAskQuestion] = useState("");
+  const [askResult, setAskResult] = useState<CourseQuestionResult | null>(null);
 
   const coursesQuery = useQuery({
     queryKey: ["courses", userId],
@@ -137,7 +142,33 @@ export function CoursesPage() {
     }
   });
 
+  const askCourseQuestionMutation = useMutation({
+    mutationFn: ({ courseId, question }: { courseId: string; question: string }) =>
+      askCourseQuestion(courseId, question),
+    onSuccess: (result) => {
+      setAskResult(result);
+    },
+    onError: (error) => {
+      setAskResult(null);
+      addToast((error as Error).message || "Failed to get an answer", "error");
+    }
+  });
+
   const courses = useMemo(() => sortCourses(coursesQuery.data ?? []), [coursesQuery.data]);
+
+  useEffect(() => {
+    if (courses.length === 0) {
+      if (selectedAskCourseId) {
+        setSelectedAskCourseId("");
+      }
+      return;
+    }
+
+    const stillExists = courses.some((course) => course.id === selectedAskCourseId);
+    if (!stillExists) {
+      setSelectedAskCourseId(courses[0]?.id ?? "");
+    }
+  }, [courses, selectedAskCourseId]);
 
   const termOptions = useMemo(() => {
     const terms = new Set<string>();
@@ -178,6 +209,24 @@ export function CoursesPage() {
     void createCourseMutation.mutateAsync({ name: trimmedName });
   }
 
+  function handleAskCourseQuestion() {
+    const question = askQuestion.trim();
+    if (!selectedAskCourseId) {
+      addToast("Select a course first", "error");
+      return;
+    }
+
+    if (!question) {
+      addToast("Enter a question first", "error");
+      return;
+    }
+
+    void askCourseQuestionMutation.mutateAsync({
+      courseId: selectedAskCourseId,
+      question
+    });
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="space-y-1">
@@ -185,6 +234,116 @@ export function CoursesPage() {
           Courses
         </h1>
       </div>
+
+      <section className="rounded-3xl border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-teal-900 dark:bg-teal-950/40 dark:text-teal-100">
+              <MessageSquareText className="h-3.5 w-3.5" />
+              Ask AI
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              Ask a question about any course handout
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Pick a course, ask a question, and get an answer grounded in the uploaded handouts for that course.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[16rem_1fr_auto]">
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              Course
+            </span>
+            <select
+              value={selectedAskCourseId}
+              onChange={(event) => setSelectedAskCourseId(event.target.value)}
+              disabled={courses.length === 0 || askCourseQuestionMutation.isPending}
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 focus:border-teal-700/40 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100"
+            >
+              {courses.length === 0 ? (
+                <option value="">No courses available</option>
+              ) : (
+                courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+              Question
+            </span>
+            <textarea
+              value={askQuestion}
+              onChange={(event) => setAskQuestion(event.target.value)}
+              rows={3}
+              placeholder="Ask about the syllabus, a topic, a formula, or an assignment from the handout..."
+              disabled={courses.length === 0 || askCourseQuestionMutation.isPending}
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 placeholder:text-stone-400 focus:border-teal-700/40 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
+          </label>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={handleAskCourseQuestion}
+              disabled={courses.length === 0 || askCourseQuestionMutation.isPending}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-teal-700 dark:hover:bg-teal-600"
+            >
+              {askCourseQuestionMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquareText className="h-4 w-4" />
+              )}
+              {askCourseQuestionMutation.isPending ? "Asking..." : "Ask AI"}
+            </button>
+          </div>
+        </div>
+
+        {askResult && (
+          <div className="mt-5 space-y-4 rounded-3xl border border-[color:var(--app-border)] bg-stone-50/70 p-5 dark:bg-slate-900/40">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                Answer
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800 dark:text-slate-200">
+                {askResult.answer}
+              </p>
+            </div>
+
+            {askResult.sources.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  Sources
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {askResult.sources.map((source) => (
+                    <div
+                      key={`${source.documentId}-${source.chunkIndex}`}
+                      className="rounded-2xl border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-4"
+                    >
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {source.fileName}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                        Chunk {source.chunkIndex + 1} • Match {Math.round(source.score * 100)}%
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                        {source.excerpt}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="rounded-3xl border border-slate-800/70 bg-[#121417] p-4 shadow-[0_20px_60px_-45px_rgba(0,0,0,0.9)] dark:border-slate-800 dark:bg-[#121417]">
         <div className="flex flex-wrap items-center justify-between gap-3">

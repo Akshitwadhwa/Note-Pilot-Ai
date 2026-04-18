@@ -1,5 +1,5 @@
 import { apiClient } from "../../lib/api-client";
-import type { Course, CourseDetail } from "../../types/domain";
+import type { Course, CourseDetail, CourseQuestionResult } from "../../types/domain";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -23,6 +23,13 @@ export async function getCourseDetail(courseId: string): Promise<CourseDetail> {
 
 export async function createCourse(input: CreateCourseInput): Promise<Course> {
   const response = await apiClient.post<ApiResponse<Course>>("/courses", input);
+  return response.data.data;
+}
+
+export async function askCourseQuestion(courseId: string, question: string): Promise<CourseQuestionResult> {
+  const response = await apiClient.post<ApiResponse<CourseQuestionResult>>(`/courses/${courseId}/ask`, {
+    question
+  });
   return response.data.data;
 }
 

@@ -10,6 +10,8 @@ type Props = {
   onEdit?: (entry: TimetableEntry) => void;
   onDelete?: (entry: TimetableEntry) => void;
   onOpenNotes?: (entry: TimetableEntry) => void;
+  title?: string;
+  description?: string;
 };
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
@@ -26,7 +28,15 @@ function formatDay(day: string): string {
   return day.charAt(0) + day.slice(1).toLowerCase();
 }
 
-export function TimetableList({ entries, selectedEntryId, onEdit, onDelete, onOpenNotes }: Props) {
+export function TimetableList({
+  entries,
+  selectedEntryId,
+  onEdit,
+  onDelete,
+  onOpenNotes,
+  title = "Weekly Schedule",
+  description
+}: Props) {
   // Group entries by day
   const grouped = DAYS_OF_WEEK.reduce<Partial<Record<DayOfWeek, TimetableEntry[]>>>((acc, day) => {
     const dayEntries = entries.filter((e) => e.dayOfWeek === day);
@@ -48,9 +58,12 @@ export function TimetableList({ entries, selectedEntryId, onEdit, onDelete, onOp
             <GraduationCap className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Weekly Schedule</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {entries.length} {entries.length === 1 ? "class" : "classes"} across {daysWithEntries.length} {daysWithEntries.length === 1 ? "day" : "days"}
+              {description ??
+                `${entries.length} ${entries.length === 1 ? "class" : "classes"} across ${daysWithEntries.length} ${
+                  daysWithEntries.length === 1 ? "day" : "days"
+                }`}
             </p>
           </div>
         </div>

@@ -2,7 +2,7 @@ import OpenAI from "openai";
 
 import { env } from "../config/env";
 import { AppError } from "../middleware/error.middleware";
-import { getNoteById, updateNoteSummary } from "./notes.service";
+import { getNoteById, getNoteByIdForUser, updateNoteSummary } from "./notes.service";
 
 const openai = env.openaiApiKey ? new OpenAI({ apiKey: env.openaiApiKey }) : null;
 
@@ -282,6 +282,46 @@ export async function summarizeNoteById(noteId: string): Promise<{ noteId: strin
   await updateNoteSummary(noteId, summary);
 
   return { noteId, summary };
+}
+
+export async function askAIAboutNote(
+  userId: string,
+  noteId: string,
+  question: string
+): Promise<{ noteId: string; answer: string }> {
+  const note = await getNoteByIdForUser(userId, noteId);
+
+  if (!note) {
+    throw new AppError("Note not found", 404);
+  }
+
+  const client = ensureOpenAI();
+  const response = await client.chat.completions.create({
+    model: env.openaiModel,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You answer questions about a student's class note. Use only the note content provided. If the answer is not in the note, say that clearly and avoid inventing details."
+      },
+      {
+        role: "user",
+        content: `Note content:\n\n${note.content}\n\nQuestion:\n${question}`
+      }
+    ]
+  });
+
+  const answer = response.choices[0]?.message?.content?.trim();
+
+  if (!answer) {
+    throw new AppError("Model returned an empty answer", 502);
+  }
+
+  return {
+    noteId,
+    answer
+  };
 }
 
 export async function extractTimetableEntriesFromImage(

@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 
 import { AppError } from "../middleware/error.middleware";
-import { createNote, listNotesByTimetable } from "../services/notes.service";
+import { createNote, listNotesByTimetable, updateNoteContent } from "../services/notes.service";
 
 export async function createNoteController(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -31,6 +31,25 @@ export async function listNotesController(req: Request, res: Response, next: Nex
 
     const notes = await listNotesByTimetable(userId, timetableId);
     res.json({ success: true, data: notes });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateNoteController(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    const noteId = Array.isArray(req.params.noteId) ? req.params.noteId[0] : req.params.noteId;
+    if (!noteId) {
+      throw new AppError("noteId is required", 422);
+    }
+
+    const note = await updateNoteContent(userId, noteId, req.body.content);
+    res.json({ success: true, data: note });
   } catch (error) {
     next(error);
   }

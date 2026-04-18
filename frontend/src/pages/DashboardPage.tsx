@@ -18,7 +18,22 @@ import {
   importTimetableImage,
   listTimetableEntries
 } from "../features/timetable/api";
-import type { GoogleClassroomDashboardItem, TimetableImportResult } from "../types/domain";
+import { DAYS_OF_WEEK } from "../types/domain";
+import type { DayOfWeek, GoogleClassroomDashboardItem, TimetableEntry, TimetableImportResult } from "../types/domain";
+
+const JS_DAY_TO_TIMETABLE_DAY: Record<number, DayOfWeek> = {
+  0: "SUNDAY",
+  1: "MONDAY",
+  2: "TUESDAY",
+  3: "WEDNESDAY",
+  4: "THURSDAY",
+  5: "FRIDAY",
+  6: "SATURDAY"
+};
+
+function formatDayLabel(day: DayOfWeek) {
+  return day.charAt(0) + day.slice(1).toLowerCase();
+}
 
 function formatDueTimestamp(value: string) {
   const date = new Date(value);
@@ -194,6 +209,47 @@ export function DashboardPage() {
       (a, b) => new Date(a.displayAt).getTime() - new Date(b.displayAt).getTime()
     );
   }, [classroomDashboardQuery.data, selectedAlertView]);
+
+  const focusedSchedule = useMemo(() => {
+    const entries = timetableQuery.data ?? [];
+    if (entries.length === 0) {
+      return {
+        title: "Upcoming Schedule",
+        description: "No classes scheduled yet.",
+        entries: [] as TimetableEntry[]
+      };
+    }
+
+    const now = new Date();
+    const today = JS_DAY_TO_TIMETABLE_DAY[now.getDay()];
+    const todayIndex = DAYS_OF_WEEK.indexOf(today);
+
+    for (let offset = 0; offset < DAYS_OF_WEEK.length; offset += 1) {
+      const day = DAYS_OF_WEEK[(todayIndex + offset) % DAYS_OF_WEEK.length]!;
+      const dayEntries = entries
+        .filter((entry) => entry.dayOfWeek === day)
+        .sort((left, right) => left.startTime.localeCompare(right.startTime));
+
+      if (dayEntries.length === 0) {
+        continue;
+      }
+
+      return {
+        title: offset === 0 ? "Today's Schedule" : `${formatDayLabel(day)} Schedule`,
+        description:
+          offset === 0
+            ? `${dayEntries.length} ${dayEntries.length === 1 ? "class" : "classes"} scheduled today`
+            : `${dayEntries.length} ${dayEntries.length === 1 ? "class" : "classes"} on the next scheduled day`,
+        entries: dayEntries
+      };
+    }
+
+    return {
+      title: "Upcoming Schedule",
+      description: "No classes scheduled yet.",
+      entries: [] as TimetableEntry[]
+    };
+  }, [timetableQuery.data]);
 
   return (
     <div className="space-y-8 stagger-children pb-10">
@@ -488,7 +544,7 @@ export function DashboardPage() {
         {/* Sidebar Area: Schedule */}
         <div className="lg:col-span-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white">Your Schedule</h2>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-white">{focusedSchedule.title}</h2>
           </div>
           {timetableQuery.isLoading ? (
             <div className="space-y-3">
@@ -498,7 +554,9 @@ export function DashboardPage() {
             </div>
           ) : (
             <TimetableList
-              entries={timetableQuery.data ?? []}
+              entries={focusedSchedule.entries}
+              title={focusedSchedule.title}
+              description={focusedSchedule.description}
               onOpenNotes={(entry) => navigate(`/past-notes?timetableId=${entry.id}`)}
             />
           )}
