@@ -32,6 +32,56 @@ async function listGoogleClassroomMaterialsSafe(userId: string) {
   }
 }
 
+async function ensureCoursesForNames(userId: string, names: Iterable<string>) {
+  const uniqueNames = Array.from(
+    new Set(
+      Array.from(names)
+        .map((name) => sanitizeCourseName(name))
+        .filter(Boolean)
+    )
+  );
+
+  if (uniqueNames.length === 0) {
+    return;
+  }
+
+  const normalizedEntries = uniqueNames.map((name) => ({
+    name,
+    normalizedName: normalizeCourseName(name)
+  }));
+
+  const existingCourses = await db.query.courses.findMany({
+    where: and(
+      eq(courses.userId, userId),
+      inArray(
+        courses.normalizedName,
+        normalizedEntries.map((entry) => entry.normalizedName)
+      )
+    ),
+    columns: {
+      normalizedName: true
+    }
+  });
+
+  const existingNormalizedNames = new Set(existingCourses.map((course) => course.normalizedName));
+  const missingCourses = normalizedEntries
+    .filter((entry) => !existingNormalizedNames.has(entry.normalizedName))
+    .map((entry) => ({
+      id: crypto.randomUUID(),
+      userId,
+      name: entry.name,
+      normalizedName: entry.normalizedName
+    }));
+
+  if (missingCourses.length === 0) {
+    return;
+  }
+
+  await db.insert(courses).values(missingCourses).onConflictDoNothing({
+    target: [courses.userId, courses.normalizedName]
+  });
+}
+
 export async function ensureCourse(userId: string, rawName: string) {
   const name = sanitizeCourseName(rawName);
   if (!name) {
@@ -65,21 +115,19 @@ async function backfillFromTimetable(userId: string) {
     where: eq(timetables.userId, userId)
   });
 
-  for (const entry of entries) {
-    const subjectName = sanitizeCourseName(entry.subjectName);
-    if (!subjectName) continue;
-    await ensureCourse(userId, subjectName);
-  }
+  await ensureCoursesForNames(
+    userId,
+    entries.map((entry) => entry.subjectName)
+  );
 }
 
 async function backfillFromGoogleClassroomMaterials(userId: string) {
   const materials = await listGoogleClassroomMaterialsSafe(userId);
 
-  for (const material of materials) {
-    const courseName = sanitizeCourseName(material.courseName ?? "");
-    if (!courseName) continue;
-    await ensureCourse(userId, courseName);
-  }
+  await ensureCoursesForNames(
+    userId,
+    materials.map((material) => material.courseName ?? "")
+  );
 }
 
 function matchesCourseName(courseNormalizedName: string, subjectName: string) {
@@ -90,9 +138,47 @@ export async function listCourses(userId: string) {
   await backfillFromTimetable(userId);
   await backfillFromGoogleClassroomMaterials(userId);
 
-  return db.query.courses.findMany({
+  const allCourses = await db.query.courses.findMany({
     where: eq(courses.userId, userId),
     orderBy: asc(courses.name)
+  });
+
+  const allDocuments = await db.query.courseDocuments.findMany({
+    where: eq(courseDocuments.userId, userId),
+    orderBy: [desc(courseDocuments.createdAt), asc(courseDocuments.fileName)],
+    columns: {
+      courseId: true,
+      fileName: true,
+      createdAt: true
+    }
+  });
+
+  const documentsByCourseId = new Map<
+    string,
+    Array<{
+      fileName: string;
+      createdAt: Date;
+    }>
+  >();
+
+  for (const document of allDocuments) {
+    const documents = documentsByCourseId.get(document.courseId) ?? [];
+    documents.push({
+      fileName: document.fileName,
+      createdAt: document.createdAt
+    });
+    documentsByCourseId.set(document.courseId, documents);
+  }
+
+  return allCourses.map((course) => {
+    const documents = documentsByCourseId.get(course.id) ?? [];
+
+    return {
+      ...course,
+      documentCount: documents.length,
+      latestHandoutName: documents[0]?.fileName ?? null,
+      handoutNames: documents.map((document) => document.fileName)
+    };
   });
 }
 

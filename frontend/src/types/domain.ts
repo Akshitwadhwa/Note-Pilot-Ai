@@ -58,6 +58,9 @@ export type Course = {
   normalizedName: string;
   createdAt: string;
   updatedAt: string;
+  documentCount?: number;
+  latestHandoutName?: string | null;
+  handoutNames?: string[];
 };
 
 export type CourseDocument = {

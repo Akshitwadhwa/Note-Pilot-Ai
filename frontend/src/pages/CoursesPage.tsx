@@ -22,6 +22,8 @@ type CoverStyle = {
   codeClass: string;
 };
 
+type CourseViewMode = "recent" | "all" | "term";
+
 const COVER_STYLES: CoverStyle[] = [
   {
     bannerClass:
@@ -82,6 +84,20 @@ function getTermLabel(createdAt: string): string {
   return `${year} Winter`;
 }
 
+function getTermSortValue(termLabel: string): number {
+  const [yearPart, seasonPart = "Winter"] = termLabel.split(" ");
+  const year = Number.parseInt(yearPart, 10);
+  const seasonWeight =
+    {
+      Spring: 1,
+      Summer: 2,
+      Fall: 3,
+      Winter: 4
+    }[seasonPart] ?? 0;
+
+  return (Number.isFinite(year) ? year : 0) * 10 + seasonWeight;
+}
+
 function sortCourses(courses: Course[]): Course[] {
   return [...courses].sort((a, b) => {
     const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -96,14 +112,16 @@ export function CoursesPage() {
   const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTerm, setSelectedTerm] = useState("All courses");
+  const [viewMode, setViewMode] = useState<CourseViewMode>("recent");
+  const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [newCourseName, setNewCourseName] = useState("");
 
   const coursesQuery = useQuery({
     queryKey: ["courses", userId],
     queryFn: listCourses,
-    enabled: userReady
+    enabled: userReady,
+    retry: false
   });
 
   const createCourseMutation = useMutation({
@@ -126,18 +144,30 @@ export function CoursesPage() {
     for (const course of courses) {
       terms.add(getTermLabel(course.createdAt));
     }
-    return ["All courses", ...Array.from(terms)];
+    return Array.from(terms).sort((left, right) => getTermSortValue(right) - getTermSortValue(left));
   }, [courses]);
+
+  const recentTerm = termOptions[0] ?? null;
+  const explicitTermOptions = recentTerm ? termOptions.filter((term) => term !== recentTerm) : termOptions;
+  const activeTerm =
+    viewMode === "all"
+      ? "All courses"
+      : viewMode === "term"
+        ? selectedTerm ?? recentTerm ?? "All courses"
+        : recentTerm ?? "All courses";
 
   const filteredCourses = useMemo(() => {
     return courses.filter((course) => {
       const matchesSearch =
         course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        makeCourseCode(course.name).toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesTerm = selectedTerm === "All courses" || getTermLabel(course.createdAt) === selectedTerm;
+        makeCourseCode(course.name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (course.handoutNames ?? []).some((handoutName) =>
+          handoutName.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      const matchesTerm = activeTerm === "All courses" || getTermLabel(course.createdAt) === activeTerm;
       return matchesSearch && matchesTerm;
     });
-  }, [courses, searchQuery, selectedTerm]);
+  }, [activeTerm, courses, searchQuery]);
 
   function handleCreateCourse() {
     const trimmedName = newCourseName.trim();
@@ -160,13 +190,50 @@ export function CoursesPage() {
       <section className="rounded-3xl border border-slate-800/70 bg-[#121417] p-4 shadow-[0_20px_60px_-45px_rgba(0,0,0,0.9)] dark:border-slate-800 dark:bg-[#121417]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            {termOptions.map((term) => {
-              const isActive = term === selectedTerm;
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("recent");
+                setSelectedTerm(null);
+              }}
+              className={clsx(
+                "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-lg font-semibold transition-colors",
+                viewMode === "recent"
+                  ? "bg-white/12 text-white"
+                  : "text-slate-300 hover:bg-white/8 hover:text-white"
+              )}
+            >
+              <Sparkles className="h-4 w-4" />
+              {recentTerm ? `Recent semester · ${recentTerm}` : "Recent semester"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode("all");
+                setSelectedTerm(null);
+              }}
+              className={clsx(
+                "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-lg font-semibold transition-colors",
+                viewMode === "all"
+                  ? "bg-white/12 text-white"
+                  : "text-slate-300 hover:bg-white/8 hover:text-white"
+              )}
+            >
+              <Zap className="h-4 w-4" />
+              All courses
+            </button>
+
+            {explicitTermOptions.map((term) => {
+              const isActive = viewMode === "term" && term === activeTerm;
               return (
                 <button
                   key={term}
                   type="button"
-                  onClick={() => setSelectedTerm(term)}
+                  onClick={() => {
+                    setViewMode("term");
+                    setSelectedTerm(term);
+                  }}
                   className={clsx(
                     "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-lg font-semibold transition-colors",
                     isActive
@@ -174,7 +241,7 @@ export function CoursesPage() {
                       : "text-slate-300 hover:bg-white/8 hover:text-white"
                   )}
                 >
-                  {term === "All courses" ? <Sparkles className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
+                  <Zap className="h-4 w-4" />
                   {term}
                 </button>
               );
@@ -241,6 +308,19 @@ export function CoursesPage() {
         )}
       </section>
 
+      {courses.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/70 px-4 py-3 text-sm text-slate-600 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+          <p>
+            {viewMode === "all"
+              ? "Showing all semesters"
+              : viewMode === "recent"
+                ? `Showing recent semester courses${recentTerm ? ` · ${recentTerm}` : ""}`
+                : `Showing ${activeTerm} courses`}
+          </p>
+          <p>{filteredCourses.length} course{filteredCourses.length === 1 ? "" : "s"}</p>
+        </div>
+      )}
+
       {coursesQuery.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="skeleton h-[300px] w-full rounded-3xl" />
@@ -278,6 +358,19 @@ export function CoursesPage() {
                     <span className="rounded-md bg-amber-700/80 px-2 py-0.5 font-semibold text-amber-100">
                       {seasonLabel}
                     </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-sm text-slate-300">
+                    <p>
+                      {course.documentCount && course.documentCount > 0
+                        ? `${course.documentCount} handout${course.documentCount === 1 ? "" : "s"}`
+                        : "No handouts uploaded yet"}
+                    </p>
+                    {course.latestHandoutName ? (
+                      <p className="line-clamp-1 text-slate-400">Latest handout: {course.latestHandoutName}</p>
+                    ) : (
+                      <p className="line-clamp-1 text-slate-500">Upload handouts to enrich this course.</p>
+                    )}
                   </div>
                 </div>
               </Link>
