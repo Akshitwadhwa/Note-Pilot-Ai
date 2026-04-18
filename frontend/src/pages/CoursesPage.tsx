@@ -148,7 +148,6 @@ export function CoursesPage() {
   }, [courses]);
 
   const recentTerm = termOptions[0] ?? null;
-  const explicitTermOptions = recentTerm ? termOptions.filter((term) => term !== recentTerm) : termOptions;
   const activeTerm =
     viewMode === "all"
       ? "All courses"
@@ -224,7 +223,7 @@ export function CoursesPage() {
               All courses
             </button>
 
-            {explicitTermOptions.map((term) => {
+            {termOptions.map((term) => {
               const isActive = viewMode === "term" && term === activeTerm;
               return (
                 <button

@@ -42,9 +42,13 @@ export async function listTimetableEntries(): Promise<TimetableEntry[]> {
   return response.data.data;
 }
 
-export async function importTimetableImage(file: File): Promise<TimetableImportResult> {
+export async function importTimetableImage(
+  file: File,
+  options?: { mode?: "merge" | "replace" }
+): Promise<TimetableImportResult> {
   const formData = new FormData();
   formData.append("image", file);
+  formData.append("mode", options?.mode === "replace" ? "replace" : "merge");
 
   const response = await apiClient.post<ApiResponse<TimetableImportResult>>(
     "/timetable/import-image",

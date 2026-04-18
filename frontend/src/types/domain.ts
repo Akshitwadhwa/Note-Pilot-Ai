@@ -33,10 +33,13 @@ export type TimetableImportCandidate = {
 };
 
 export type TimetableImportResult = {
+  mode: "merge" | "replace";
   extractedCount: number;
   insertedCount: number;
   skippedDuplicateCount: number;
   skippedConflictCount: number;
+  removedExistingCount: number;
+  finalCount: number;
   inserted: TimetableEntry[];
   skippedDuplicates: TimetableImportCandidate[];
   skippedConflicts: TimetableImportCandidate[];
@@ -202,6 +205,15 @@ export type GoogleClassroomMaterial = {
 export type GoogleClassroomMaterialDetail = GoogleClassroomMaterial & {
   quizzes: MaterialQuiz[];
   attempts: MaterialQuizAttempt[];
+};
+
+export type QuizPrepOverviewItem = MaterialQuiz & {
+  materialTitle: string;
+  courseName?: string | null;
+  latestAttempt: MaterialQuizAttempt | null;
+  attempts: MaterialQuizAttempt[];
+  attemptCount: number;
+  bestScore: number | null;
 };
 
 export type GoogleClassroomSyncResult = {

@@ -11,6 +11,7 @@ import {
   getGoogleClassroomMaterialDetail,
   getGoogleClassroomAuthUrl,
   getGoogleClassroomStatus,
+  listGoogleClassroomQuizPrep,
   listGoogleClassroomMaterials,
   submitGoogleClassroomQuizAttempt,
   syncGoogleClassroom
@@ -121,6 +122,24 @@ export async function listGoogleClassroomMaterialsController(
     }
 
     const data = await listGoogleClassroomMaterials(userId);
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listGoogleClassroomQuizPrepController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    const data = await listGoogleClassroomQuizPrep(userId);
     res.json({ success: true, data });
   } catch (error) {
     next(error);

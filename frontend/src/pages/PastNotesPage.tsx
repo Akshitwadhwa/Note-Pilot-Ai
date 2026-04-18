@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   History,
@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import clsx from "clsx";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -37,6 +38,7 @@ export function PastNotesPage() {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedEntry, setSelectedEntry] = useState<TimetableEntry | null>(null);
   const [noteContent, setNoteContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -82,6 +84,7 @@ export function PastNotesPage() {
   });
 
   const entries = timetableQuery.data ?? [];
+  const preselectedEntryId = searchParams.get("timetableId");
   const filteredEntries = searchQuery
     ? entries.filter(
         (e) =>
@@ -89,6 +92,41 @@ export function PastNotesPage() {
           e.dayOfWeek.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : entries;
+
+  useEffect(() => {
+    if (entries.length === 0) {
+      if (selectedEntry) {
+        setSelectedEntry(null);
+      }
+      return;
+    }
+
+    if (preselectedEntryId) {
+      const matchedEntry = entries.find((entry) => entry.id === preselectedEntryId) ?? null;
+      if (matchedEntry) {
+        if (selectedEntry?.id !== matchedEntry.id) {
+          setSelectedEntry(matchedEntry);
+          setNoteContent("");
+        }
+        return;
+      }
+    }
+
+    if (!selectedEntry) {
+      return;
+    }
+
+    const refreshedEntry = entries.find((entry) => entry.id === selectedEntry.id) ?? null;
+    if (refreshedEntry?.id !== selectedEntry.id) {
+      setSelectedEntry(refreshedEntry);
+    }
+  }, [entries, preselectedEntryId, selectedEntry, setNoteContent]);
+
+  function handleSelectEntry(entry: TimetableEntry) {
+    setSelectedEntry(entry);
+    setNoteContent("");
+    setSearchParams({ timetableId: entry.id }, { replace: true });
+  }
 
   async function handleSaveNote() {
     if (!selectedEntry || !noteContent.trim()) return;
@@ -164,10 +202,7 @@ export function PastNotesPage() {
                     <button
                       key={entry.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedEntry(entry);
-                        setNoteContent("");
-                      }}
+                      onClick={() => handleSelectEntry(entry)}
                       className={clsx(
                         "w-full rounded-2xl border p-3 text-left transition-all duration-200",
                         isSelected

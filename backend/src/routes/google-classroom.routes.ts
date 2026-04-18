@@ -9,6 +9,7 @@ import {
   getGoogleClassroomAuthUrlController,
   getGoogleClassroomStatusController,
   googleClassroomOAuthCallbackController,
+  listGoogleClassroomQuizPrepController,
   listGoogleClassroomMaterialsController,
   submitGoogleClassroomQuizAttemptController,
   syncGoogleClassroomController
@@ -22,6 +23,7 @@ router.get("/callback", googleClassroomOAuthCallbackController);
 router.get("/status", authMiddleware, getGoogleClassroomStatusController);
 router.get("/dashboard-summary", authMiddleware, getGoogleClassroomDashboardSummaryController);
 router.post("/sync", authMiddleware, syncGoogleClassroomController);
+router.get("/quiz-prep", authMiddleware, listGoogleClassroomQuizPrepController);
 router.get("/materials", authMiddleware, listGoogleClassroomMaterialsController);
 router.get("/materials/:materialId", authMiddleware, getGoogleClassroomMaterialDetailController);
 router.post("/materials/:materialId/analyze", authMiddleware, analyzeGoogleClassroomMaterialController);

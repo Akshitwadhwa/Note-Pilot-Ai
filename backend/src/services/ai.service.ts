@@ -13,6 +13,23 @@ export type ExtractedTimetableEntry = {
   subjectName: string;
 };
 
+type RawExtractedTimetableEntry = {
+  dayOfWeek?: string;
+  startTime?: string;
+  endTime?: string;
+  subjectName?: string;
+};
+
+type TimetableVisionResponse = {
+  entries?: RawExtractedTimetableEntry[];
+  days?:
+    | Array<{
+        dayOfWeek?: string;
+        entries?: RawExtractedTimetableEntry[];
+      }>
+    | Record<string, RawExtractedTimetableEntry[]>;
+};
+
 function ensureOpenAI() {
   if (!openai) {
     throw new AppError("OPENAI_API_KEY is not configured", 500);
@@ -90,6 +107,24 @@ function normalizeTime(value: string) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function normalizeTimeField(value: string, edge: "start" | "end") {
+  const direct = normalizeTime(value);
+  if (direct) {
+    return direct;
+  }
+
+  const rangeSegments = value
+    .split(/\s*(?:-|–|—|to)\s*/i)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (rangeSegments.length >= 2) {
+    return normalizeTime(edge === "start" ? rangeSegments[0] : rangeSegments[rangeSegments.length - 1]);
+  }
+
+  return null;
+}
+
 function normalizeSubjectName(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.slice(0, 120);
@@ -103,17 +138,43 @@ function encodeImageAsDataUrl(file: Express.Multer.File) {
   return `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
 }
 
-function normalizeExtractedEntries(entries: Array<{
-  dayOfWeek?: string;
-  startTime?: string;
-  endTime?: string;
-  subjectName?: string;
-}>) {
+function flattenVisionEntries(payload: TimetableVisionResponse) {
+  const entries: RawExtractedTimetableEntry[] = [...(payload.entries ?? [])];
+
+  if (Array.isArray(payload.days)) {
+    for (const dayGroup of payload.days) {
+      const dayOfWeek = dayGroup.dayOfWeek;
+      for (const entry of dayGroup.entries ?? []) {
+        entries.push({
+          ...entry,
+          dayOfWeek: entry.dayOfWeek ?? dayOfWeek
+        });
+      }
+    }
+  } else if (payload.days && typeof payload.days === "object") {
+    for (const [dayOfWeek, dayEntries] of Object.entries(payload.days)) {
+      if (!Array.isArray(dayEntries)) {
+        continue;
+      }
+
+      for (const entry of dayEntries) {
+        entries.push({
+          ...entry,
+          dayOfWeek: entry.dayOfWeek ?? dayOfWeek
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function normalizeExtractedEntries(entries: RawExtractedTimetableEntry[]) {
   return entries
     .map((entry) => {
       const dayOfWeek = entry.dayOfWeek ? normalizeDayOfWeek(entry.dayOfWeek) : null;
-      const startTime = entry.startTime ? normalizeTime(entry.startTime) : null;
-      const endTime = entry.endTime ? normalizeTime(entry.endTime) : null;
+      const startTime = entry.startTime ? normalizeTimeField(entry.startTime, "start") : null;
+      const endTime = entry.endTime ? normalizeTimeField(entry.endTime, "end") : null;
       const subjectName = entry.subjectName ? normalizeSubjectName(entry.subjectName) : "";
 
       if (!dayOfWeek || !startTime || !endTime || !subjectName) {
@@ -175,16 +236,8 @@ async function runTimetableVisionPass(
   }
 
   try {
-    const parsed = JSON.parse(extractJsonPayload(raw)) as {
-      entries?: Array<{
-        dayOfWeek?: string;
-        startTime?: string;
-        endTime?: string;
-        subjectName?: string;
-      }>;
-    };
-
-    return normalizeExtractedEntries(parsed.entries ?? []);
+    const parsed = JSON.parse(extractJsonPayload(raw)) as TimetableVisionResponse;
+    return normalizeExtractedEntries(flattenVisionEntries(parsed));
   } catch {
     return [];
   }
@@ -255,8 +308,16 @@ export async function extractTimetableEntriesFromImage(
     "Do a second careful pass over this timetable screenshot. Count the visible class cards under each visible weekday heading and extract them all. Include partially visible cards if their day, subject, and time range are readable. Return only JSON."
   );
 
+  const groupedEntries = await runTimetableVisionPass(
+    client,
+    env.openaiModel,
+    imageUrl,
+    systemPrompt,
+    "Read the timetable by weekday sections. Return JSON grouped by visible weekday headings, using either {\"days\": [{\"dayOfWeek\": \"MONDAY\", \"entries\": [...]}]} or an equivalent days object. Capture all visible cards under each day header. If multiple classes appear side by side on one day, include every one of them."
+  );
+
   const deduped = new Map<string, ExtractedTimetableEntry>();
-  for (const entry of [...primaryEntries, ...secondaryEntries]) {
+  for (const entry of [...primaryEntries, ...secondaryEntries, ...groupedEntries]) {
     deduped.set(
       `${entry.dayOfWeek}|${entry.startTime}|${entry.endTime}|${entry.subjectName.toLowerCase()}`,
       entry

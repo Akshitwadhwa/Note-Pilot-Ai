@@ -17,11 +17,16 @@ type UpdateTimetableInput = CreateTimetableInput & {
   timetableId: string;
 };
 
+export type TimetableImportMode = "merge" | "replace";
+
 export type TimetableImportResult = {
+  mode: TimetableImportMode;
   extractedCount: number;
   insertedCount: number;
   skippedDuplicateCount: number;
   skippedConflictCount: number;
+  removedExistingCount: number;
+  finalCount: number;
   inserted: Array<Awaited<ReturnType<typeof createTimetableEntry>>>;
   skippedDuplicates: ExtractedTimetableEntry[];
   skippedConflicts: ExtractedTimetableEntry[];
@@ -168,7 +173,8 @@ export async function getNextClass(userId: string, now: Date) {
 
 export async function importTimetableFromImage(
   userId: string,
-  file: Express.Multer.File
+  file: Express.Multer.File,
+  mode: TimetableImportMode = "merge"
 ): Promise<TimetableImportResult> {
   const extractedEntries = await extractTimetableEntriesFromImage(file);
 
@@ -180,7 +186,15 @@ export async function importTimetableFromImage(
   }
 
   const existingEntries = await listTimetableEntries(userId);
-  const workingEntries = [...existingEntries];
+  let removedExistingCount = 0;
+
+  if (mode === "replace" && existingEntries.length > 0) {
+    removedExistingCount = existingEntries.length;
+    await db.delete(notes).where(eq(notes.userId, userId));
+    await db.delete(timetables).where(eq(timetables.userId, userId));
+  }
+
+  const workingEntries = mode === "replace" ? [] : [...existingEntries];
   const inserted: TimetableImportResult["inserted"] = [];
   const skippedDuplicates: ExtractedTimetableEntry[] = [];
   const skippedConflicts: ExtractedTimetableEntry[] = [];
@@ -209,10 +223,13 @@ export async function importTimetableFromImage(
   }
 
   return {
+    mode,
     extractedCount: extractedEntries.length,
     insertedCount: inserted.length,
     skippedDuplicateCount: skippedDuplicates.length,
     skippedConflictCount: skippedConflicts.length,
+    removedExistingCount,
+    finalCount: workingEntries.length,
     inserted,
     skippedDuplicates,
     skippedConflicts

@@ -130,7 +130,8 @@ export async function importTimetableImage(
       throw new AppError("Timetable image is required", 422);
     }
 
-    const result = await importTimetableFromImage(userId, file as Express.Multer.File);
+    const mode = req.body?.mode === "replace" ? "replace" : "merge";
+    const result = await importTimetableFromImage(userId, file as Express.Multer.File, mode);
     res.status(201).json({ success: true, data: result });
   } catch (error) {
     next(error);

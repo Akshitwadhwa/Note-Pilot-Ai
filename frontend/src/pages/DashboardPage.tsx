@@ -2,7 +2,7 @@ import { useMemo, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, ClipboardList, ImageUp, LayoutDashboard, Loader2, NotebookTabs } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -81,6 +81,7 @@ export function DashboardPage() {
   const { userId, userReady } = useAuth();
   const { addToast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [lastImportResult, setLastImportResult] = useState<TimetableImportResult | null>(null);
   const [selectedAlertView, setSelectedAlertView] = useState<"all" | "assignments" | "quizzes">("all");
 
@@ -139,7 +140,7 @@ export function DashboardPage() {
   });
 
   const importTimetableMutation = useMutation({
-    mutationFn: importTimetableImage,
+    mutationFn: (file: File) => importTimetableImage(file),
     onSuccess: async (result) => {
       setLastImportResult(result);
       await Promise.all([
@@ -496,7 +497,10 @@ export function DashboardPage() {
               <div className="skeleton h-12 w-full" />
             </div>
           ) : (
-            <TimetableList entries={timetableQuery.data ?? []} />
+            <TimetableList
+              entries={timetableQuery.data ?? []}
+              onOpenNotes={(entry) => navigate(`/past-notes?timetableId=${entry.id}`)}
+            />
           )}
         </div>
       </div>

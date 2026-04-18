@@ -9,6 +9,7 @@ type Props = {
   selectedEntryId?: string | null;
   onEdit?: (entry: TimetableEntry) => void;
   onDelete?: (entry: TimetableEntry) => void;
+  onOpenNotes?: (entry: TimetableEntry) => void;
 };
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
@@ -25,7 +26,7 @@ function formatDay(day: string): string {
   return day.charAt(0) + day.slice(1).toLowerCase();
 }
 
-export function TimetableList({ entries, selectedEntryId, onEdit, onDelete }: Props) {
+export function TimetableList({ entries, selectedEntryId, onEdit, onDelete, onOpenNotes }: Props) {
   // Group entries by day
   const grouped = DAYS_OF_WEEK.reduce<Partial<Record<DayOfWeek, TimetableEntry[]>>>((acc, day) => {
     const dayEntries = entries.filter((e) => e.dayOfWeek === day);
@@ -89,8 +90,23 @@ export function TimetableList({ entries, selectedEntryId, onEdit, onDelete }: Pr
                   {dayEntries.map((entry) => (
                     <div
                       key={entry.id}
+                      role={onOpenNotes ? "button" : undefined}
+                      tabIndex={onOpenNotes ? 0 : undefined}
+                      onClick={onOpenNotes ? () => onOpenNotes(entry) : undefined}
+                      onKeyDown={
+                        onOpenNotes
+                          ? (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onOpenNotes(entry);
+                              }
+                            }
+                          : undefined
+                      }
                       className={clsx(
                         "group relative flex items-start gap-3 rounded-2xl border p-3.5 transition-all duration-200 hover:shadow-md",
+                        onOpenNotes &&
+                          "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40",
                         selectedEntryId === entry.id
                           ? "border-teal-500/70 bg-teal-50/80 shadow-md dark:border-teal-500/70 dark:bg-teal-950/20"
                           : "border-stone-200/80 bg-stone-50/80 hover:border-stone-300 dark:border-slate-700/60 dark:bg-slate-800/40 dark:hover:border-slate-600/80"
@@ -121,11 +137,14 @@ export function TimetableList({ entries, selectedEntryId, onEdit, onDelete }: Pr
                         {entry.startTime}
                       </span>
                       {(onEdit || onDelete) && (
-                        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                           {onEdit && (
                             <button
                               type="button"
-                              onClick={() => onEdit(entry)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onEdit(entry);
+                              }}
                               className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
                             >
                               <PencilLine className="h-3 w-3" />
@@ -135,7 +154,10 @@ export function TimetableList({ entries, selectedEntryId, onEdit, onDelete }: Pr
                           {onDelete && (
                             <button
                               type="button"
-                              onClick={() => onDelete(entry)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onDelete(entry);
+                              }}
                               className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-rose-700 dark:border-rose-900/70 dark:bg-slate-900/80 dark:text-rose-300"
                               aria-label={`Delete ${entry.subjectName}`}
                             >

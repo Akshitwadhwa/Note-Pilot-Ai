@@ -5,6 +5,7 @@ import {
   CalendarDays,
   GraduationCap,
   FolderKanban,
+  NotebookTabs,
   FileText,
   History,
   LogOut,
@@ -51,6 +52,7 @@ const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/timetable", label: "Timetable", icon: CalendarDays },
   { to: "/materials", label: "Materials", icon: FolderKanban },
+  { to: "/quiz-prep", label: "Quiz Prep", icon: NotebookTabs },
   { to: "/courses", label: "Courses", icon: GraduationCap },
   { to: "/notes", label: "Notes", icon: FileText },
   { to: "/past-notes", label: "Past Notes", icon: History }

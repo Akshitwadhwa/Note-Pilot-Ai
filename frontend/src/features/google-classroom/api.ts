@@ -8,6 +8,7 @@ import type {
   MaterialAiAnalysis,
   MaterialQuiz,
   MaterialQuizAttemptResult,
+  QuizPrepOverviewItem,
   QuizPrepPack
 } from "../../types/domain";
 
@@ -36,6 +37,11 @@ export async function getGoogleClassroomDashboardSummary(): Promise<GoogleClassr
 
 export async function syncGoogleClassroom(): Promise<GoogleClassroomSyncResult> {
   const response = await apiClient.post<ApiResponse<GoogleClassroomSyncResult>>("/google-classroom/sync");
+  return response.data.data;
+}
+
+export async function listGoogleClassroomQuizPrep(): Promise<QuizPrepOverviewItem[]> {
+  const response = await apiClient.get<ApiResponse<QuizPrepOverviewItem[]>>("/google-classroom/quiz-prep");
   return response.data.data;
 }
 

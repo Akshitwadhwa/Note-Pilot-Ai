@@ -1455,6 +1455,50 @@ export async function getGoogleClassroomMaterialDetail(userId: string, materialI
   };
 }
 
+export async function listGoogleClassroomQuizPrep(userId: string) {
+  const [quizzes, attempts, materials] = await Promise.all([
+    db.query.materialQuizzes.findMany({
+      where: eq(materialQuizzes.userId, userId),
+      orderBy: desc(materialQuizzes.createdAt)
+    }),
+    db.query.materialQuizAttempts.findMany({
+      where: eq(materialQuizAttempts.userId, userId),
+      orderBy: desc(materialQuizAttempts.createdAt)
+    }),
+    db.query.googleClassroomMaterials.findMany({
+      where: eq(googleClassroomMaterials.userId, userId)
+    })
+  ]);
+
+  const attemptsByQuizId = new Map<string, Array<typeof materialQuizAttempts.$inferSelect>>();
+  for (const attempt of attempts) {
+    const group = attemptsByQuizId.get(attempt.quizId) ?? [];
+    group.push(attempt);
+    attemptsByQuizId.set(attempt.quizId, group);
+  }
+
+  const materialById = new Map(materials.map((material) => [material.id, material]));
+
+  return quizzes.map((quiz) => {
+    const quizAttempts = attemptsByQuizId.get(quiz.id) ?? [];
+    const material = materialById.get(quiz.materialId) ?? null;
+    const bestScore =
+      quizAttempts.length > 0
+        ? quizAttempts.reduce((highest, attempt) => Math.max(highest, attempt.score), quizAttempts[0]!.score)
+        : null;
+
+    return {
+      ...quiz,
+      materialTitle: material?.title ?? "Unknown material",
+      courseName: material?.courseName ?? null,
+      latestAttempt: quizAttempts[0] ?? null,
+      attempts: quizAttempts,
+      attemptCount: quizAttempts.length,
+      bestScore
+    };
+  });
+}
+
 export async function analyzeGoogleClassroomMaterial(userId: string, materialId: string) {
   const material = await getOwnedMaterial(userId, materialId);
   const attachments = await db.query.googleClassroomMaterialAttachments.findMany({
