@@ -6,6 +6,8 @@ import { DashboardPage } from "../pages/DashboardPage";
 import { TimetablePage } from "../pages/TimetablePage";
 import { CoursesPage } from "../pages/CoursesPage";
 import { CourseDetailPage } from "../pages/CourseDetailPage";
+import { MaterialDetailPage } from "../pages/MaterialDetailPage";
+import { MaterialsPage } from "../pages/MaterialsPage";
 import { NotesPage } from "../pages/NotesPage";
 import { PastNotesPage } from "../pages/PastNotesPage";
 import { AuthenticatedLayout } from "../components/layout/AuthenticatedLayout";
@@ -19,6 +21,8 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "timetable", element: <TimetablePage /> },
+      { path: "materials", element: <MaterialsPage /> },
+      { path: "materials/:materialId", element: <MaterialDetailPage /> },
       { path: "courses", element: <CoursesPage /> },
       { path: "courses/:courseId", element: <CourseDetailPage /> },
       { path: "notes", element: <NotesPage /> },

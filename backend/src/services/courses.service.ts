@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../lib/db";
-import { courseDocuments, courses, notes, timetables } from "../lib/drizzle/schema";
+import { courseDocuments, courses, googleClassroomMaterials, notes, timetables } from "../lib/drizzle/schema";
 import { AppError } from "../middleware/error.middleware";
 
 function normalizeCourseName(name: string): string {
@@ -12,8 +12,31 @@ export function sanitizeCourseName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
-async function ensureCourse(userId: string, rawName: string) {
+function isMissingRelationError(error: unknown) {
+  const candidate = error as { code?: string } | undefined;
+  return candidate?.code === "42P01";
+}
+
+async function listGoogleClassroomMaterialsSafe(userId: string) {
+  try {
+    return await db.query.googleClassroomMaterials.findMany({
+      where: eq(googleClassroomMaterials.userId, userId),
+      orderBy: [desc(googleClassroomMaterials.publishedAt), desc(googleClassroomMaterials.createdAt)]
+    });
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+export async function ensureCourse(userId: string, rawName: string) {
   const name = sanitizeCourseName(rawName);
+  if (!name) {
+    throw new AppError("Course name is required", 422);
+  }
   const normalizedName = normalizeCourseName(name);
 
   const existing = await db.query.courses.findFirst({
@@ -49,12 +72,23 @@ async function backfillFromTimetable(userId: string) {
   }
 }
 
+async function backfillFromGoogleClassroomMaterials(userId: string) {
+  const materials = await listGoogleClassroomMaterialsSafe(userId);
+
+  for (const material of materials) {
+    const courseName = sanitizeCourseName(material.courseName ?? "");
+    if (!courseName) continue;
+    await ensureCourse(userId, courseName);
+  }
+}
+
 function matchesCourseName(courseNormalizedName: string, subjectName: string) {
   return normalizeCourseName(subjectName) === courseNormalizedName;
 }
 
 export async function listCourses(userId: string) {
   await backfillFromTimetable(userId);
+  await backfillFromGoogleClassroomMaterials(userId);
 
   return db.query.courses.findMany({
     where: eq(courses.userId, userId),
@@ -64,6 +98,7 @@ export async function listCourses(userId: string) {
 
 export async function getCourseDetail(userId: string, courseId: string) {
   await backfillFromTimetable(userId);
+  await backfillFromGoogleClassroomMaterials(userId);
 
   const course = await db.query.courses.findFirst({
     where: and(eq(courses.id, courseId), eq(courses.userId, userId))
@@ -93,10 +128,15 @@ export async function getCourseDetail(userId: string, courseId: string) {
     orderBy: desc(courseDocuments.createdAt)
   });
 
+  const syncedGoogleMaterials = (await listGoogleClassroomMaterialsSafe(userId)).filter((material) =>
+    matchesCourseName(course.normalizedName, material.courseName ?? "")
+  );
+
   return {
     course,
     timetableEntries,
     documents,
+    googleClassroomMaterials: syncedGoogleMaterials,
     notes: notesForCourse.map((note) => ({
       ...note,
       timetableEntry: timetableById.get(note.timetableId) ?? null

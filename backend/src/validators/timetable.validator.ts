@@ -6,11 +6,17 @@ const DayOfWeekEnum = z.enum([
   "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
 ]);
 
-export const createTimetableSchema = z.object({
+export const timetableEntryPayloadSchema = z.object({
   dayOfWeek: DayOfWeekEnum,
   startTime: z.string().regex(hhmmRegex, "startTime must be HH:mm"),
   endTime: z.string().regex(hhmmRegex, "endTime must be HH:mm"),
   subjectName: z.string().min(1).max(120)
+});
+
+export const createTimetableSchema = timetableEntryPayloadSchema;
+export const updateTimetableSchema = timetableEntryPayloadSchema;
+export const timetableParamsSchema = z.object({
+  timetableId: z.string().min(1)
 });
 
 export const currentClassQuerySchema = z.object({

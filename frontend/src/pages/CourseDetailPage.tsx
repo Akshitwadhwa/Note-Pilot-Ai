@@ -5,8 +5,12 @@ import {
   BookMarked,
   CalendarDays,
   CheckSquare2,
+  ClipboardList,
   Clock3,
+  ExternalLink,
   FileText,
+  FolderKanban,
+  Megaphone,
   Search
 } from "lucide-react";
 import clsx from "clsx";
@@ -14,7 +18,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { getCourseDetail } from "../features/courses/api";
-import type { CourseNote, DayOfWeek } from "../types/domain";
+import type { CourseNote, DayOfWeek, GoogleClassroomMaterial } from "../types/domain";
 
 type NotesView = "all" | "review";
 
@@ -54,6 +58,64 @@ function buildMaterialsLabel(note: CourseNote): string {
 
 function getReviewStorageKey(courseId: string) {
   return `course-note-review:${courseId}`;
+}
+
+function formatMaterialSource(sourceType: string) {
+  if (sourceType === "announcement") return "Post";
+  if (sourceType === "course_work") return "Assignment";
+  if (sourceType === "course_material") return "Material";
+  return sourceType.replace(/_/g, " ");
+}
+
+function getMaterialSortTimestamp(material: GoogleClassroomMaterial) {
+  return new Date(material.publishedAt ?? material.createdAt).getTime();
+}
+
+function getMaterialSummary(material: GoogleClassroomMaterial) {
+  const text = material.description?.trim() || material.analysis?.summary?.trim() || "";
+  if (!text) {
+    return "No preview available for this post yet.";
+  }
+
+  return text.length > 140 ? `${text.slice(0, 140).trimEnd()}...` : text;
+}
+
+function getMaterialDueLabel(material: GoogleClassroomMaterial) {
+  if (material.sourceType !== "course_work") {
+    return null;
+  }
+
+  const metadata = material.metadata as
+    | {
+        dueDate?: { year?: number; month?: number; day?: number } | null;
+        dueTime?: { hours?: number; minutes?: number } | null;
+      }
+    | null
+    | undefined;
+
+  const dueDate = metadata?.dueDate;
+  if (!dueDate?.year || !dueDate?.month || !dueDate?.day) {
+    return "No due date";
+  }
+
+  const due = new Date(
+    dueDate.year,
+    Math.max((dueDate.month ?? 1) - 1, 0),
+    dueDate.day,
+    metadata?.dueTime?.hours ?? 0,
+    metadata?.dueTime?.minutes ?? 0
+  );
+
+  if (Number.isNaN(due.getTime())) {
+    return "No due date";
+  }
+
+  return `Due ${due.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
 }
 
 export function CourseDetailPage() {
@@ -159,6 +221,13 @@ export function CourseDetailPage() {
   const totalNotes = detail.notes.length;
   const pendingCount = Math.max(totalNotes - reviewedCount, 0);
   const reviewProgress = totalNotes === 0 ? 0 : Math.round((reviewedCount / totalNotes) * 100);
+  const sortedMaterials = [...detail.googleClassroomMaterials].sort(
+    (a, b) => getMaterialSortTimestamp(b) - getMaterialSortTimestamp(a)
+  );
+  const recentPosts = sortedMaterials.slice(0, 5);
+  const assignmentMaterials = sortedMaterials.filter((material) => material.sourceType === "course_work");
+  const announcementMaterials = sortedMaterials.filter((material) => material.sourceType === "announcement");
+  const materialResources = sortedMaterials.filter((material) => material.sourceType === "course_material");
 
   function toggleReviewed(noteId: string) {
     setReviewedMap((current) => {
@@ -189,7 +258,7 @@ export function CourseDetailPage() {
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight">{detail.course.name}</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80">
-                  Review notes, inspect class slots, and track your progress from one place.
+                  Review notes, inspect class slots, and browse synced Google Classroom materials for this subject.
                 </p>
               </div>
 
@@ -208,7 +277,7 @@ export function CourseDetailPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 px-6 py-5 sm:grid-cols-4">
+          <div className="grid gap-3 px-6 py-5 sm:grid-cols-3 xl:grid-cols-7">
             <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                 Notes
@@ -241,12 +310,160 @@ export function CourseDetailPage() {
                 {detail.timetableEntries.length}
               </p>
             </div>
+            <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                GC Materials
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+                {detail.googleClassroomMaterials.length}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                Assignments
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+                {assignmentMaterials.length}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-stone-100/80 px-4 py-3 dark:bg-slate-800/80">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                Recent Posts
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+                {announcementMaterials.length}
+              </p>
+            </div>
           </div>
         </section>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="space-y-5">
+          <section className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
+            <div className="mb-4 flex items-center gap-2">
+              <FolderKanban className="h-5 w-5 text-teal-700 dark:text-teal-300" />
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Course Feed</h2>
+            </div>
+
+            {detail.googleClassroomMaterials.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-stone-300 p-6 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No synced Google Classroom materials match this course yet.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-[color:var(--app-border)] bg-stone-50/80 p-4 dark:bg-slate-900/45">
+                    <div className="flex items-center gap-2">
+                      <Megaphone className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Recent posts</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100">
+                      {announcementMaterials.length}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Announcements synced from Google Classroom
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[color:var(--app-border)] bg-stone-50/80 p-4 dark:bg-slate-900/45">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Assignments</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100">
+                      {assignmentMaterials.length}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Coursework items attached to this course
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-[color:var(--app-border)] bg-stone-50/80 p-4 dark:bg-slate-900/45">
+                    <div className="flex items-center gap-2">
+                      <FolderKanban className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Resources</p>
+                    </div>
+                    <p className="mt-3 text-3xl font-bold text-slate-900 dark:text-slate-100">
+                      {materialResources.length}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Shared course materials and posts
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      Recent Activity
+                    </p>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {recentPosts.length} most recent item{recentPosts.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  {recentPosts.map((material) => (
+                    <div
+                      key={material.id}
+                      className="rounded-2xl border border-[color:var(--app-border)] bg-stone-50/80 p-4 dark:bg-slate-900/45"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={clsx(
+                                "rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
+                                material.sourceType === "course_work"
+                                  ? "bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-100"
+                                  : material.sourceType === "announcement"
+                                    ? "bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-100"
+                                    : "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                              )}
+                            >
+                              {formatMaterialSource(material.sourceType)}
+                            </span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              {formatTimestamp(material.publishedAt ?? material.createdAt)}
+                            </span>
+                          </div>
+                          <Link
+                            to={`/materials/${material.id}`}
+                            className="mt-2 block text-base font-semibold text-slate-900 hover:text-teal-800 dark:text-slate-100 dark:hover:text-teal-200"
+                          >
+                            {material.title}
+                          </Link>
+                        </div>
+
+                        {material.alternateLink ? (
+                          <a
+                            href={material.alternateLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-sm font-medium text-teal-800 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200"
+                          >
+                            Open
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                      </div>
+
+                      <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                        {getMaterialSummary(material)}
+                      </p>
+
+                      {material.sourceType === "course_work" && (
+                        <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                          {getMaterialDueLabel(material)}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-2">

@@ -19,6 +19,14 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    const headers = config.headers as Record<string, string | undefined> | undefined;
+    if (headers) {
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
+  }
+
   if (!supabase) {
     return config;
   }

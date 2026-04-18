@@ -13,7 +13,6 @@ const huggingFaceClient = env.huggingFaceApiKey
       apiKey: env.huggingFaceApiKey
     })
   : null;
-const pdfParse = require("pdf-parse") as (buffer: Buffer) => Promise<{ text: string }>;
 
 type SyllabusExtraction = {
   syllabusSummary: string | null;
@@ -21,10 +20,45 @@ type SyllabusExtraction = {
   evaluationCriteria: string | null;
 };
 
+type QuizPrepSource = {
+  label: string;
+  kind: "handout" | "classroom_material";
+  excerpt: string;
+};
+
+type QuizPrepSection = {
+  heading: string;
+  content: string;
+};
+
+type QuizPrepQuestion = {
+  question: string;
+  options: string[];
+  answer: string;
+  explanation: string | null;
+};
+
+export type QuizPrepPack = {
+  topic: string;
+  noteTitle: string;
+  noteSections: QuizPrepSection[];
+  practiceQuestions: QuizPrepQuestion[];
+  sources: QuizPrepSource[];
+};
+
+type SupplementalContext = {
+  label: string;
+  content: string;
+};
+
 function extractJsonPayload(raw: string) {
   const trimmed = raw.trim();
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   return fencedMatch?.[1]?.trim() ?? trimmed;
+}
+
+function normalizeCourseName(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function ensureOpenAI() {
@@ -46,6 +80,19 @@ function ensureHuggingFace() {
   return huggingFaceClient;
 }
 
+async function parsePdfBuffer(buffer: Buffer) {
+  try {
+    const pdfParseModule = require("pdf-parse") as (input: Buffer) => Promise<{ text: string }>;
+    return await pdfParseModule(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown PDF parser error";
+    throw new AppError(
+      `PDF uploads are temporarily unavailable in this environment (${message}). Upload TXT/MD instead, or install the missing PDF runtime dependency.`,
+      500
+    );
+  }
+}
+
 async function ensureCourseOwnership(userId: string, courseId: string) {
   const course = await db.query.courses.findFirst({
     where: and(eq(courses.id, courseId), eq(courses.userId, userId))
@@ -60,7 +107,7 @@ async function ensureCourseOwnership(userId: string, courseId: string) {
 
 async function extractTextFromUpload(file: Express.Multer.File) {
   if (file.mimetype === "application/pdf") {
-    const parsed = await pdfParse(file.buffer);
+    const parsed = await parsePdfBuffer(file.buffer);
     return parsed.text.trim();
   }
 
@@ -329,5 +376,209 @@ export async function askCourseQuestion(userId: string, courseId: string, questi
         excerpt: chunk.content.slice(0, 240)
       };
     })
+  };
+}
+
+export async function buildQuizPrepPack(
+  userId: string,
+  courseName: string,
+  studyGoal: string,
+  supplementalContext: SupplementalContext[] = []
+): Promise<QuizPrepPack> {
+  const client = ensureOpenAI();
+  const normalizedCourseName = normalizeCourseName(courseName);
+
+  const course = await db.query.courses.findFirst({
+    where: and(eq(courses.userId, userId), eq(courses.normalizedName, normalizedCourseName))
+  });
+
+  const chunks =
+    course
+      ? await db.query.courseDocumentChunks.findMany({
+          where: and(eq(courseDocumentChunks.userId, userId), eq(courseDocumentChunks.courseId, course.id)),
+          orderBy: [asc(courseDocumentChunks.createdAt), asc(courseDocumentChunks.chunkIndex)]
+        })
+      : [];
+
+  const documents =
+    course
+      ? await db.query.courseDocuments.findMany({
+          where: and(eq(courseDocuments.userId, userId), eq(courseDocuments.courseId, course.id)),
+          orderBy: desc(courseDocuments.createdAt)
+        })
+      : [];
+
+  const documentById = new Map(documents.map((document) => [document.id, document]));
+
+  const rankedChunks =
+    chunks.length > 0
+      ? (() => {
+          return chunks;
+        })()
+      : [];
+
+  const [queryEmbedding] = chunks.length > 0 ? await embedTexts([studyGoal]) : [[]];
+  const relevantChunks =
+    rankedChunks.length > 0
+      ? rankedChunks
+          .map((chunk) => ({
+            chunk,
+            score: cosineSimilarity((chunk.embedding as number[]) ?? [], (queryEmbedding as number[]) ?? [])
+          }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 8)
+      : [];
+
+  const courseContext = relevantChunks
+    .map(({ chunk }, index) => {
+      const document = documentById.get(chunk.documentId);
+      return `Handout Source ${index + 1} (${document?.fileName ?? "course handout"}):\n${chunk.content}`;
+    })
+    .join("\n\n");
+
+  const supplementalText = supplementalContext
+    .filter((item) => item.content.trim())
+    .map((item, index) => `Supplemental Source ${index + 1} (${item.label}):\n${item.content.trim()}`)
+    .join("\n\n");
+
+  if (!courseContext && !supplementalText) {
+    throw new AppError("Upload course handouts or sync relevant course materials before building a quiz study note.", 422);
+  }
+
+  const completion = await client.chat.completions.create({
+    model: env.openaiModel,
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content:
+          "You create exam prep notes for students using only the provided source context. Return JSON with keys topic, noteTitle, noteSections, practiceQuestions. noteSections must be an array of objects with heading and content. practiceQuestions must be an array of 4 multiple choice questions with keys question, options, answer, explanation. Use exactly 4 string options per question."
+      },
+      {
+        role: "user",
+        content: `Course: ${courseName}\nStudy Goal: ${studyGoal}\n\nContext:\n${courseContext}\n\n${supplementalText}`
+      }
+    ]
+  });
+
+  const raw = completion.choices[0]?.message?.content?.trim();
+  if (!raw) {
+    throw new AppError("Model returned an empty quiz prep pack", 502);
+  }
+
+  let parsed: {
+    topic?: unknown;
+    noteTitle?: unknown;
+    noteSections?: unknown;
+    practiceQuestions?: unknown;
+  };
+
+  try {
+    parsed = JSON.parse(extractJsonPayload(raw));
+  } catch {
+    throw new AppError("Model returned invalid quiz prep JSON", 502);
+  }
+
+  const topic =
+    typeof parsed.topic === "string" && parsed.topic.trim() ? parsed.topic.trim() : studyGoal.trim();
+  const noteTitle =
+    typeof parsed.noteTitle === "string" && parsed.noteTitle.trim()
+      ? parsed.noteTitle.trim()
+      : `Study Note: ${topic}`;
+
+  const noteSections = Array.isArray(parsed.noteSections)
+    ? parsed.noteSections
+        .map((section) => {
+          if (!section || typeof section !== "object") {
+            return null;
+          }
+
+          const typedSection = section as Record<string, unknown>;
+          const heading =
+            typeof typedSection.heading === "string" && typedSection.heading.trim()
+              ? typedSection.heading.trim()
+              : "";
+          const content =
+            typeof typedSection.content === "string" && typedSection.content.trim()
+              ? typedSection.content.trim()
+              : "";
+
+          if (!heading || !content) {
+            return null;
+          }
+
+          return { heading, content };
+        })
+        .filter((section): section is QuizPrepSection => Boolean(section))
+    : [];
+
+  const practiceQuestions = Array.isArray(parsed.practiceQuestions)
+    ? parsed.practiceQuestions
+        .map((question) => {
+          if (!question || typeof question !== "object") {
+            return null;
+          }
+
+          const typedQuestion = question as Record<string, unknown>;
+          const prompt =
+            typeof typedQuestion.question === "string" && typedQuestion.question.trim()
+              ? typedQuestion.question.trim()
+              : "";
+          const options = Array.isArray(typedQuestion.options)
+            ? typedQuestion.options.filter((item): item is string => typeof item === "string").map((item) => item.trim())
+            : [];
+          const answer =
+            typeof typedQuestion.answer === "string" && typedQuestion.answer.trim()
+              ? typedQuestion.answer.trim()
+              : "";
+          const explanation =
+            typeof typedQuestion.explanation === "string" && typedQuestion.explanation.trim()
+              ? typedQuestion.explanation.trim()
+              : null;
+
+          if (!prompt || options.length !== 4 || !answer) {
+            return null;
+          }
+
+          return {
+            question: prompt,
+            options,
+            answer,
+            explanation
+          };
+        })
+        .filter((question): question is QuizPrepQuestion => Boolean(question))
+    : [];
+
+  const sources: QuizPrepSource[] = [
+    ...relevantChunks.map(({ chunk }) => {
+      const document = documentById.get(chunk.documentId);
+      return {
+        label: document?.fileName ?? "course handout",
+        kind: "handout" as const,
+        excerpt: chunk.content.slice(0, 240)
+      };
+    }),
+    ...supplementalContext
+      .filter((item) => item.content.trim())
+      .slice(0, 4)
+      .map((item) => ({
+        label: item.label,
+        kind: "classroom_material" as const,
+        excerpt: item.content.trim().slice(0, 240)
+      }))
+  ];
+
+  if (noteSections.length === 0 && practiceQuestions.length === 0) {
+    throw new AppError("Could not build a useful quiz prep pack from the available sources", 502);
+  }
+
+  return {
+    topic,
+    noteTitle,
+    noteSections,
+    practiceQuestions,
+    sources
   };
 }

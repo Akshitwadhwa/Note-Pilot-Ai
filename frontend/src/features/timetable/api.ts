@@ -1,5 +1,5 @@
 import { apiClient } from "../../lib/api-client";
-import type { DayOfWeek, TimetableEntry } from "../../types/domain";
+import type { DayOfWeek, TimetableEntry, TimetableImportResult } from "../../types/domain";
 
 type ApiResponse<T> = {
   success: boolean;
@@ -19,6 +19,19 @@ export async function createTimetableEntry(input: CreateTimetableInput): Promise
   return response.data.data;
 }
 
+export async function updateTimetableEntry(
+  timetableId: string,
+  input: CreateTimetableInput
+): Promise<TimetableEntry> {
+  const response = await apiClient.put<ApiResponse<TimetableEntry>>(`/timetable/${timetableId}`, input);
+  return response.data.data;
+}
+
+export async function deleteTimetableEntry(timetableId: string): Promise<TimetableEntry> {
+  const response = await apiClient.delete<ApiResponse<TimetableEntry>>(`/timetable/${timetableId}`);
+  return response.data.data;
+}
+
 export async function getCurrentClass(): Promise<TimetableEntry | null> {
   const response = await apiClient.get<ApiResponse<TimetableEntry | null>>("/timetable/current");
   return response.data.data ?? null;
@@ -26,5 +39,17 @@ export async function getCurrentClass(): Promise<TimetableEntry | null> {
 
 export async function listTimetableEntries(): Promise<TimetableEntry[]> {
   const response = await apiClient.get<ApiResponse<TimetableEntry[]>>("/timetable");
+  return response.data.data;
+}
+
+export async function importTimetableImage(file: File): Promise<TimetableImportResult> {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const response = await apiClient.post<ApiResponse<TimetableImportResult>>(
+    "/timetable/import-image",
+    formData
+  );
+
   return response.data.data;
 }

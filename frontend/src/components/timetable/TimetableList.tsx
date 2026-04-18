@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, GraduationCap } from "lucide-react";
+import { CalendarDays, Clock, GraduationCap, PencilLine, Trash2 } from "lucide-react";
 import clsx from "clsx";
 
 import type { TimetableEntry, DayOfWeek } from "../../types/domain";
@@ -6,6 +6,9 @@ import { DAYS_OF_WEEK } from "../../types/domain";
 
 type Props = {
   entries: TimetableEntry[];
+  selectedEntryId?: string | null;
+  onEdit?: (entry: TimetableEntry) => void;
+  onDelete?: (entry: TimetableEntry) => void;
 };
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
@@ -22,7 +25,7 @@ function formatDay(day: string): string {
   return day.charAt(0) + day.slice(1).toLowerCase();
 }
 
-export function TimetableList({ entries }: Props) {
+export function TimetableList({ entries, selectedEntryId, onEdit, onDelete }: Props) {
   // Group entries by day
   const grouped = DAYS_OF_WEEK.reduce<Partial<Record<DayOfWeek, TimetableEntry[]>>>((acc, day) => {
     const dayEntries = entries.filter((e) => e.dayOfWeek === day);
@@ -88,8 +91,9 @@ export function TimetableList({ entries }: Props) {
                       key={entry.id}
                       className={clsx(
                         "group relative flex items-start gap-3 rounded-2xl border p-3.5 transition-all duration-200 hover:shadow-md",
-                        "border-stone-200/80 bg-stone-50/80 hover:border-stone-300",
-                        "dark:border-slate-700/60 dark:bg-slate-800/40 dark:hover:border-slate-600/80"
+                        selectedEntryId === entry.id
+                          ? "border-teal-500/70 bg-teal-50/80 shadow-md dark:border-teal-500/70 dark:bg-teal-950/20"
+                          : "border-stone-200/80 bg-stone-50/80 hover:border-stone-300 dark:border-slate-700/60 dark:bg-slate-800/40 dark:hover:border-slate-600/80"
                       )}
                     >
                       {/* Color accent bar */}
@@ -116,6 +120,30 @@ export function TimetableList({ entries }: Props) {
                       >
                         {entry.startTime}
                       </span>
+                      {(onEdit || onDelete) && (
+                        <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                          {onEdit && (
+                            <button
+                              type="button"
+                              onClick={() => onEdit(entry)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
+                            >
+                              <PencilLine className="h-3 w-3" />
+                              Edit
+                            </button>
+                          )}
+                          {onDelete && (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(entry)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white/80 px-2 py-1 text-[11px] font-semibold text-rose-700 dark:border-rose-900/70 dark:bg-slate-900/80 dark:text-rose-300"
+                              aria-label={`Delete ${entry.subjectName}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

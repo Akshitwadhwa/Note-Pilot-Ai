@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { CalendarDays, Clock, BookOpen, Plus, ArrowRight } from "lucide-react";
+import { CalendarDays, Clock, BookOpen, Plus, ArrowRight, PencilLine } from "lucide-react";
 import clsx from "clsx";
 
 import { DAYS_OF_WEEK } from "../../types/domain";
-import type { DayOfWeek } from "../../types/domain";
+import type { DayOfWeek, TimetableEntry } from "../../types/domain";
 
 type Props = {
   disabled?: boolean;
+  mode?: "create" | "edit";
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+  initialValues?: Pick<TimetableEntry, "dayOfWeek" | "startTime" | "endTime" | "subjectName"> | null;
+  onCancel?: () => void;
   onCreate: (payload: {
     dayOfWeek: DayOfWeek;
     startTime: string;
@@ -29,13 +35,29 @@ const DAY_SHORT: Record<DayOfWeek, string> = {
 const inputClasses =
   "w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15 disabled:cursor-not-allowed disabled:opacity-50";
 
-export function TimetableEntryForm({ disabled, onCreate }: Props) {
-  const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>("MONDAY");
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("10:00");
-  const [subjectName, setSubjectName] = useState("");
+export function TimetableEntryForm({
+  disabled,
+  mode = "create",
+  title = mode === "edit" ? "Edit Class" : "Add Class",
+  description = mode === "edit" ? "Update the selected class details" : "Schedule a new class to your timetable",
+  submitLabel = mode === "edit" ? "Save Changes" : "Add to Schedule",
+  initialValues,
+  onCancel,
+  onCreate
+}: Props) {
+  const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>(initialValues?.dayOfWeek ?? "MONDAY");
+  const [startTime, setStartTime] = useState(initialValues?.startTime ?? "09:00");
+  const [endTime, setEndTime] = useState(initialValues?.endTime ?? "10:00");
+  const [subjectName, setSubjectName] = useState(initialValues?.subjectName ?? "");
   const trimmedSubjectName = subjectName.trim();
   const isInvalid = !trimmedSubjectName || !startTime || !endTime;
+
+  useEffect(() => {
+    setDayOfWeek(initialValues?.dayOfWeek ?? "MONDAY");
+    setStartTime(initialValues?.startTime ?? "09:00");
+    setEndTime(initialValues?.endTime ?? "10:00");
+    setSubjectName(initialValues?.subjectName ?? "");
+  }, [initialValues]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,7 +65,9 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
 
     try {
       await onCreate({ dayOfWeek, startTime, endTime, subjectName: trimmedSubjectName });
-      setSubjectName("");
+      if (mode === "create") {
+        setSubjectName("");
+      }
     } catch {
       // Mutation-level handlers already surface API errors via toast.
     }
@@ -54,11 +78,11 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
       {/* Header */}
       <div className="mb-5 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-stone-200 text-slate-800 dark:bg-slate-800 dark:text-slate-100">
-          <Plus className="h-5 w-5" />
+          {mode === "edit" ? <PencilLine className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Add Class</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Schedule a new class to your timetable</p>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
         </div>
       </div>
 
@@ -167,9 +191,23 @@ export function TimetableEntryForm({ disabled, onCreate }: Props) {
               "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-md"
             )}
           >
-            <Plus className="h-4 w-4 transition-transform group-hover/btn:rotate-90" />
-            Add to Schedule
+            {mode === "edit" ? (
+              <PencilLine className="h-4 w-4 transition-transform group-hover/btn:-rotate-6" />
+            ) : (
+              <Plus className="h-4 w-4 transition-transform group-hover/btn:rotate-90" />
+            )}
+            {submitLabel}
           </button>
+          {mode === "edit" && onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={disabled}
+              className="inline-flex items-center justify-center rounded-2xl border border-stone-200 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </form>
     </section>
