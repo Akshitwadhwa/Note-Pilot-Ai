@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 
@@ -5,8 +6,14 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { CurrentClassCard } from "../components/timetable/CurrentClassCard";
 import { NoteComposer } from "../components/notes/NoteComposer";
-import { createNote, listNotes, summarizeNote } from "../features/notes/api";
+import {
+  analyzeGoogleClassroomMaterial,
+  askGoogleClassroomMaterial,
+  listGoogleClassroomMaterials
+} from "../features/google-classroom/api";
+import { assistText, createNote, listNotes, summarizeNote } from "../features/notes/api";
 import { getCurrentClass } from "../features/timetable/api";
+import { isLikelySameCourse } from "../utils/course-matching";
 
 export function NotesPage() {
   const { userId, userReady } = useAuth();
@@ -25,6 +32,13 @@ export function NotesPage() {
     queryKey: ["notes", currentClassQuery.data?.id, userId],
     queryFn: () => listNotes(currentClassQuery.data!.id),
     enabled: Boolean(currentClassQuery.data?.id) && userReady
+  });
+
+  const classroomMaterialsQuery = useQuery({
+    queryKey: ["google-classroom-materials", userId],
+    queryFn: listGoogleClassroomMaterials,
+    enabled: userReady,
+    retry: false
   });
 
   const createNoteMutation = useMutation({
@@ -53,6 +67,39 @@ export function NotesPage() {
     }
   });
 
+  const assistTextMutation = useMutation({
+    mutationFn: ({ text, question }: { text: string; question: string }) => assistText(text, question),
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to ask AI about your note", "error");
+    }
+  });
+
+  const summarizeMaterialMutation = useMutation({
+    mutationFn: analyzeGoogleClassroomMaterial,
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to summarize material", "error");
+    }
+  });
+
+  const askMaterialMutation = useMutation({
+    mutationFn: ({ materialId, question }: { materialId: string; question: string }) =>
+      askGoogleClassroomMaterial(materialId, question),
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to ask about material", "error");
+    }
+  });
+
+  const materialsForCurrentClass = useMemo(() => {
+    const activeClass = currentClassQuery.data;
+    const materials = classroomMaterialsQuery.data ?? [];
+
+    if (!activeClass) {
+      return [];
+    }
+
+    return materials.filter((material) => isLikelySameCourse(activeClass.subjectName, material.courseName ?? ""));
+  }, [classroomMaterialsQuery.data, currentClassQuery.data]);
+
   return (
     <div className="space-y-6 stagger-children">
       <div>
@@ -70,11 +117,23 @@ export function NotesPage() {
       <NoteComposer
         activeClass={currentClassQuery.data ?? null}
         notes={notesQuery.data ?? []}
+        enableSlashCommands
+        classroomMaterials={materialsForCurrentClass}
         onCreateNote={async ({ timetableId, content }) => {
           await createNoteMutation.mutateAsync({ timetableId, content });
         }}
         onSummarize={async (noteId) => {
           await summarizeMutation.mutateAsync(noteId);
+        }}
+        onAssistText={async ({ text, question }) => {
+          return assistTextMutation.mutateAsync({ text, question });
+        }}
+        onSummarizeMaterial={async (materialId) => {
+          const analysis = await summarizeMaterialMutation.mutateAsync(materialId);
+          return { summary: analysis.summary };
+        }}
+        onAskMaterial={async ({ materialId, question }) => {
+          return askMaterialMutation.mutateAsync({ materialId, question });
         }}
       />
     </div>

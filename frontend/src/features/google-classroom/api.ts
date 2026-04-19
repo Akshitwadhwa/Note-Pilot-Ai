@@ -66,6 +66,17 @@ export async function analyzeGoogleClassroomMaterial(materialId: string): Promis
   return response.data.data;
 }
 
+export async function askGoogleClassroomMaterial(
+  materialId: string,
+  question: string
+): Promise<{ materialId: string; answer: string }> {
+  const response = await apiClient.post<ApiResponse<{ materialId: string; answer: string }>>(
+    `/google-classroom/materials/${materialId}/ask`,
+    { question }
+  );
+  return response.data.data;
+}
+
 export async function generateGoogleClassroomQuizPrep(materialId: string): Promise<QuizPrepPack> {
   const response = await apiClient.post<ApiResponse<QuizPrepPack>>(
     `/google-classroom/materials/${materialId}/quiz-prep`

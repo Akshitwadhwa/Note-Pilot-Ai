@@ -2,6 +2,7 @@ import OpenAI from "openai";
 
 import { env } from "../config/env";
 import { AppError } from "../middleware/error.middleware";
+import { sanitizeTimetableSubjectName } from "../utils/timetable-subject";
 import { getNoteById, getNoteByIdForUser, updateNoteSummary } from "./notes.service";
 
 const openai = env.openaiApiKey ? new OpenAI({ apiKey: env.openaiApiKey }) : null;
@@ -126,8 +127,7 @@ function normalizeTimeField(value: string, edge: "start" | "end") {
 }
 
 function normalizeSubjectName(value: string) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.slice(0, 120);
+  return sanitizeTimetableSubjectName(value);
 }
 
 function encodeImageAsDataUrl(file: Express.Multer.File) {
@@ -271,6 +271,33 @@ export async function summarizeText(text: string): Promise<string> {
   return summary;
 }
 
+export async function askAIAboutText(text: string, question: string): Promise<{ answer: string }> {
+  const client = ensureOpenAI();
+
+  const response = await client.chat.completions.create({
+    model: env.openaiModel,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You answer questions about student notes. Use only the provided text. If the answer is not supported by the text, say that clearly."
+      },
+      {
+        role: "user",
+        content: `Text:\n\n${text}\n\nQuestion:\n${question}`
+      }
+    ]
+  });
+
+  const answer = response.choices[0]?.message?.content?.trim();
+  if (!answer) {
+    throw new AppError("Model returned an empty answer", 502);
+  }
+
+  return { answer };
+}
+
 export async function summarizeNoteById(noteId: string): Promise<{ noteId: string; summary: string }> {
   const note = await getNoteById(noteId);
 
@@ -330,7 +357,7 @@ export async function extractTimetableEntriesFromImage(
   const client = ensureOpenAI();
   const imageUrl = encodeImageAsDataUrl(file);
   const systemPrompt =
-    "You extract weekly class schedules from timetable images. Return only valid JSON with an `entries` array. Each item must have dayOfWeek, startTime, endTime, subjectName. dayOfWeek must be a weekday name, startTime and endTime must be 24-hour HH:mm strings, and subjectName must be concise. Never invent classes, but do include all clearly visible timetable cards, even if the screenshot is a dark UI or only a partial page capture.";
+    "You extract weekly class schedules from timetable images. Return only valid JSON with an `entries` array. Each item must have dayOfWeek, startTime, endTime, subjectName. dayOfWeek must be a weekday name, startTime and endTime must be 24-hour HH:mm strings, and subjectName must be concise. Never invent classes, but do include all clearly visible timetable cards, even if the screenshot is a dark UI or only a partial page capture. Ignore non-class blocks like lunch, break, or recess. If a subject ends with a room or venue token such as NB208 or NB 208, keep only the course name and exclude the venue from subjectName.";
 
   const primaryEntries = await runTimetableVisionPass(
     client,

@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 
 import { AppError } from "../middleware/error.middleware";
 import {
+  askGoogleClassroomMaterial,
   analyzeGoogleClassroomMaterial,
   buildGoogleClassroomErrorRedirect,
   completeGoogleClassroomOAuthFromCallback,
@@ -188,6 +189,30 @@ export async function analyzeGoogleClassroomMaterialController(
     }
 
     const data = await analyzeGoogleClassroomMaterial(userId, materialId);
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function askGoogleClassroomMaterialController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    const materialIdRaw = req.params.materialId;
+    const materialId = Array.isArray(materialIdRaw) ? materialIdRaw[0] : materialIdRaw;
+    if (!materialId) {
+      throw new AppError("materialId is required", 422);
+    }
+
+    const data = await askGoogleClassroomMaterial(userId, materialId, req.body.question);
     res.json({ success: true, data });
   } catch (error) {
     next(error);

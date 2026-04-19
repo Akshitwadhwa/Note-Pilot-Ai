@@ -2,6 +2,7 @@ import { eq, lt, gt, lte, and, asc, desc, ne } from "drizzle-orm";
 import { db } from "../lib/db";
 import { notes, timetables } from "../lib/drizzle/schema";
 import { AppError } from "../middleware/error.middleware";
+import { isIgnoredTimetableSubject, sanitizeTimetableSubjectName } from "../utils/timetable-subject";
 import { getDayOfWeekEnum, toHHMM } from "../utils/time";
 import { extractTimetableEntriesFromImage, type ExtractedTimetableEntry } from "./ai.service";
 
@@ -55,6 +56,17 @@ function isExactDuplicate(
   );
 }
 
+function presentTimetableEntry<T extends { subjectName: string }>(entry: T) {
+  return {
+    ...entry,
+    subjectName: sanitizeTimetableSubjectName(entry.subjectName)
+  };
+}
+
+function isVisibleTimetableEntry<T extends { subjectName: string }>(entry: T) {
+  return !isIgnoredTimetableSubject(entry.subjectName);
+}
+
 async function ensureTimetableOwnership(userId: string, timetableId: string) {
   const entry = await db.query.timetables.findFirst({
     where: and(eq(timetables.id, timetableId), eq(timetables.userId, userId))
@@ -75,7 +87,7 @@ async function assertNoConflictingTimetableEntry(
     throw new AppError("startTime must be before endTime", 422);
   }
 
-  const overlap = await db.query.timetables.findFirst({
+  const overlaps = await db.query.timetables.findMany({
     where: and(
       eq(timetables.userId, input.userId),
       eq(timetables.dayOfWeek, input.dayOfWeek),
@@ -85,13 +97,18 @@ async function assertNoConflictingTimetableEntry(
     )
   });
 
-  if (overlap) {
+  if (overlaps.some(isVisibleTimetableEntry)) {
     throw new AppError("Timetable conflict: overlapping class already exists", 409);
   }
 }
 
 export async function createTimetableEntry(input: CreateTimetableInput) {
-  await assertNoConflictingTimetableEntry(input);
+  const subjectName = sanitizeTimetableSubjectName(input.subjectName);
+  if (!subjectName) {
+    throw new AppError("Use only real class names in the timetable", 422);
+  }
+
+  await assertNoConflictingTimetableEntry({ ...input, subjectName });
 
   const result = await db
     .insert(timetables)
@@ -101,16 +118,21 @@ export async function createTimetableEntry(input: CreateTimetableInput) {
       dayOfWeek: input.dayOfWeek,
       startTime: input.startTime,
       endTime: input.endTime,
-      subjectName: input.subjectName.trim()
+      subjectName
     })
     .returning();
 
-  return result[0];
+  return presentTimetableEntry(result[0]);
 }
 
 export async function updateTimetableEntry(input: UpdateTimetableInput) {
+  const subjectName = sanitizeTimetableSubjectName(input.subjectName);
+  if (!subjectName) {
+    throw new AppError("Use only real class names in the timetable", 422);
+  }
+
   await ensureTimetableOwnership(input.userId, input.timetableId);
-  await assertNoConflictingTimetableEntry(input, input.timetableId);
+  await assertNoConflictingTimetableEntry({ ...input, subjectName }, input.timetableId);
 
   const result = await db
     .update(timetables)
@@ -118,13 +140,13 @@ export async function updateTimetableEntry(input: UpdateTimetableInput) {
       dayOfWeek: input.dayOfWeek,
       startTime: input.startTime,
       endTime: input.endTime,
-      subjectName: input.subjectName.trim(),
+      subjectName,
       updatedAt: new Date()
     })
     .where(and(eq(timetables.id, input.timetableId), eq(timetables.userId, input.userId)))
     .returning();
 
-  return result[0];
+  return presentTimetableEntry(result[0]);
 }
 
 export async function deleteTimetableEntry(userId: string, timetableId: string) {
@@ -133,35 +155,41 @@ export async function deleteTimetableEntry(userId: string, timetableId: string) 
   await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.timetableId, timetableId)));
   await db.delete(timetables).where(and(eq(timetables.id, timetableId), eq(timetables.userId, userId)));
 
-  return entry;
+  return presentTimetableEntry(entry);
 }
 
 export async function listTimetableEntries(userId: string) {
-  return db.query.timetables.findMany({
+  const entries = await db.query.timetables.findMany({
     where: eq(timetables.userId, userId),
     orderBy: [asc(timetables.dayOfWeek), asc(timetables.startTime)]
   });
+
+  return entries.filter(isVisibleTimetableEntry).map(presentTimetableEntry);
 }
 
 export async function getCurrentClass(userId: string, now: Date) {
   const dayOfWeek = getDayOfWeekEnum(now);
   const currentTime = toHHMM(now);
 
-  return db.query.timetables.findFirst({
+  const entries = await db.query.timetables.findMany({
     where: and(
       eq(timetables.userId, userId),
       eq(timetables.dayOfWeek, dayOfWeek),
       lte(timetables.startTime, currentTime),
       gt(timetables.endTime, currentTime)
-    )
+    ),
+    orderBy: asc(timetables.startTime)
   });
+
+  const currentClass = entries.find(isVisibleTimetableEntry);
+  return currentClass ? presentTimetableEntry(currentClass) : null;
 }
 
 export async function getNextClass(userId: string, now: Date) {
   const dayOfWeek = getDayOfWeekEnum(now);
   const currentTime = toHHMM(now);
 
-  return db.query.timetables.findFirst({
+  const entries = await db.query.timetables.findMany({
     where: and(
       eq(timetables.userId, userId),
       eq(timetables.dayOfWeek, dayOfWeek),
@@ -169,6 +197,9 @@ export async function getNextClass(userId: string, now: Date) {
     ),
     orderBy: asc(timetables.startTime)
   });
+
+  const nextClass = entries.find(isVisibleTimetableEntry);
+  return nextClass ? presentTimetableEntry(nextClass) : null;
 }
 
 export async function importTimetableFromImage(

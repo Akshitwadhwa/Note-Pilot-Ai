@@ -29,6 +29,14 @@ export async function updateNote(noteId: string, content: string): Promise<Note>
   return response.data.data;
 }
 
+export async function assistText(text: string, question: string): Promise<{ answer: string }> {
+  const response = await apiClient.post<ApiResponse<{ answer: string }>>("/ai/assist-text", {
+    text,
+    question
+  });
+  return response.data.data;
+}
+
 export async function summarizeNote(noteId: string): Promise<{ noteId: string; summary: string }> {
   const response = await apiClient.post<ApiResponse<{ noteId: string; summary: string }>>(
     "/ai/summarize-note",

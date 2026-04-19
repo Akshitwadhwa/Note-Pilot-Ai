@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, ClipboardList, ImageUp, LayoutDashboard, Loader2, NotebookTabs } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -11,7 +11,11 @@ import { NextClassCard } from "../components/timetable/NextClassCard";
 // import { TimetableEntryForm } from "../components/timetable/TimetableEntryForm"; // Removed for cleaner dashboard
 import { TimetableList } from "../components/timetable/TimetableList";
 import { NoteComposer } from "../components/notes/NoteComposer";
-import { getGoogleClassroomDashboardSummary } from "../features/google-classroom/api";
+import {
+  getGoogleClassroomDashboardSummary,
+  getGoogleClassroomStatus,
+  syncGoogleClassroom
+} from "../features/google-classroom/api";
 import { createNote, listNotes, summarizeNote } from "../features/notes/api";
 import {
   getCurrentClass,
@@ -99,6 +103,19 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [lastImportResult, setLastImportResult] = useState<TimetableImportResult | null>(null);
   const [selectedAlertView, setSelectedAlertView] = useState<"all" | "assignments" | "quizzes">("all");
+  const dashboardSeenCutoff = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const raw = window.localStorage.getItem(`google-classroom-dashboard-last-viewed:${userId}`);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }, [userId]);
 
   const currentClassQuery = useQuery({
     queryKey: ["current-class", userId],
@@ -114,12 +131,31 @@ export function DashboardPage() {
     enabled: userReady
   });
 
+  const classroomStatusQuery = useQuery({
+    queryKey: ["google-classroom-status", userId],
+    queryFn: getGoogleClassroomStatus,
+    enabled: userReady,
+    refetchOnWindowFocus: false
+  });
+
   const classroomDashboardQuery = useQuery({
     queryKey: ["google-classroom-dashboard-summary", userId],
     queryFn: getGoogleClassroomDashboardSummary,
     enabled: userReady,
     refetchInterval: 5 * 60 * 1000,
     refetchIntervalInBackground: true
+  });
+
+  const autoSyncGoogleClassroomMutation = useMutation({
+    mutationFn: syncGoogleClassroom,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["google-classroom-status", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["google-classroom-dashboard-summary", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["google-classroom-materials", userId] }),
+        queryClient.invalidateQueries({ queryKey: ["courses", userId] })
+      ]);
+    }
   });
 
   const notesQuery = useQuery({
@@ -191,24 +227,48 @@ export function DashboardPage() {
     void importTimetableMutation.mutateAsync(file);
   }
 
-  const selectedAlertItems = useMemo(() => {
+  const filteredDashboardUpdates = useMemo(() => {
     const data = classroomDashboardQuery.data;
     if (!data) {
-      return [] as GoogleClassroomDashboardItem[];
+      return {
+        assignments: [] as GoogleClassroomDashboardItem[],
+        quizzes: [] as GoogleClassroomDashboardItem[]
+      };
     }
 
+    const filterItems = (items: GoogleClassroomDashboardItem[]) =>
+      dashboardSeenCutoff
+        ? items.filter((item) => new Date(item.referenceAt).getTime() > dashboardSeenCutoff.getTime())
+        : items;
+
+    return {
+      assignments: filterItems(data.upcomingAssignments),
+      quizzes: filterItems(data.upcomingQuizzes)
+    };
+  }, [classroomDashboardQuery.data, dashboardSeenCutoff]);
+
+  const selectedAlertItems = useMemo(() => {
     if (selectedAlertView === "assignments") {
-      return data.upcomingAssignments;
+      return filteredDashboardUpdates.assignments;
     }
 
     if (selectedAlertView === "quizzes") {
-      return data.upcomingQuizzes;
+      return filteredDashboardUpdates.quizzes;
     }
 
-    return [...data.upcomingAssignments, ...data.upcomingQuizzes].sort(
+    return [...filteredDashboardUpdates.assignments, ...filteredDashboardUpdates.quizzes].sort(
       (a, b) => new Date(a.displayAt).getTime() - new Date(b.displayAt).getTime()
     );
-  }, [classroomDashboardQuery.data, selectedAlertView]);
+  }, [filteredDashboardUpdates, selectedAlertView]);
+
+  const newUpdateCounts = useMemo(
+    () => ({
+      totalUpcomingCount: filteredDashboardUpdates.assignments.length + filteredDashboardUpdates.quizzes.length,
+      assignmentsDueCount: filteredDashboardUpdates.assignments.length,
+      quizzesComingCount: filteredDashboardUpdates.quizzes.length
+    }),
+    [filteredDashboardUpdates]
+  );
 
   const focusedSchedule = useMemo(() => {
     const entries = timetableQuery.data ?? [];
@@ -251,6 +311,44 @@ export function DashboardPage() {
     };
   }, [timetableQuery.data]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !userReady || !classroomDashboardQuery.data) {
+      return;
+    }
+
+    if (autoSyncGoogleClassroomMutation.isPending) {
+      return;
+    }
+
+    window.localStorage.setItem(`google-classroom-dashboard-last-viewed:${userId}`, new Date().toISOString());
+  }, [autoSyncGoogleClassroomMutation.isPending, classroomDashboardQuery.data, userId, userReady]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !userReady) {
+      return;
+    }
+
+    const status = classroomStatusQuery.data;
+    if (!status?.connected || autoSyncGoogleClassroomMutation.isPending) {
+      return;
+    }
+
+    const syncGuardKey = `google-classroom-auto-sync:${userId}`;
+    if (window.sessionStorage.getItem(syncGuardKey) === "done") {
+      return;
+    }
+
+    const lastSyncedAt = status.lastSyncedAt ? new Date(status.lastSyncedAt) : null;
+    const shouldSync =
+      !lastSyncedAt || Number.isNaN(lastSyncedAt.getTime()) || Date.now() - lastSyncedAt.getTime() > 10 * 60 * 1000;
+
+    window.sessionStorage.setItem(syncGuardKey, "done");
+
+    if (shouldSync) {
+      void autoSyncGoogleClassroomMutation.mutateAsync();
+    }
+  }, [autoSyncGoogleClassroomMutation, classroomStatusQuery.data, userId, userReady]);
+
   return (
     <div className="space-y-8 stagger-children pb-10">
       <header className="flex items-center justify-between">
@@ -288,10 +386,10 @@ export function DashboardPage() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                  Google Classroom Alerts
+                  New Google Classroom Updates
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Upcoming assignments, quizzes, and support generated from your synced Classroom items.
+                  Fresh Classroom changes since your last dashboard visit, synced automatically when you come back.
                 </p>
               </div>
             </div>
@@ -325,24 +423,24 @@ export function DashboardPage() {
               <DashboardMetric
                 active={selectedAlertView === "all"}
                 onClick={() => setSelectedAlertView("all")}
-                label="All Upcoming"
-                value={classroomDashboardQuery.data.totalUpcomingCount}
+                label="All New"
+                value={newUpdateCounts.totalUpcomingCount}
                 icon={BellRing}
                 tone="slate"
               />
               <DashboardMetric
                 active={selectedAlertView === "assignments"}
                 onClick={() => setSelectedAlertView("assignments")}
-                label="Assignments Due Soon"
-                value={classroomDashboardQuery.data.assignmentsDueCount}
+                label="New Assignments"
+                value={newUpdateCounts.assignmentsDueCount}
                 icon={ClipboardList}
                 tone="amber"
               />
               <DashboardMetric
                 active={selectedAlertView === "quizzes"}
                 onClick={() => setSelectedAlertView("quizzes")}
-                label="Quizzes Coming"
-                value={classroomDashboardQuery.data.quizzesComingCount}
+                label="New Quizzes"
+                value={newUpdateCounts.quizzesComingCount}
                 icon={NotebookTabs}
                 tone="teal"
               />
@@ -359,20 +457,20 @@ export function DashboardPage() {
                 )}
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                   {selectedAlertView === "assignments"
-                    ? "Upcoming Assignments"
+                    ? "New Assignment Updates"
                     : selectedAlertView === "quizzes"
-                      ? "Upcoming Quizzes"
-                      : "All Upcoming Alerts"}
+                      ? "New Quiz Updates"
+                      : "All New Updates"}
                 </h3>
               </div>
 
               {selectedAlertItems.length === 0 ? (
                 <div className="rounded-2xl border border-stone-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
                   {selectedAlertView === "assignments"
-                    ? "No upcoming assignments were detected in the synced Classroom data."
+                    ? "No new assignment updates were detected since your last visit."
                     : selectedAlertView === "quizzes"
-                      ? "No upcoming quizzes were detected in the synced Classroom data."
-                      : "No upcoming Classroom alerts were detected in the synced data."}
+                      ? "No new quiz updates were detected since your last visit."
+                      : "No new Google Classroom updates were detected since your last visit."}
                 </div>
               ) : (
                 selectedAlertItems.map((item) => (

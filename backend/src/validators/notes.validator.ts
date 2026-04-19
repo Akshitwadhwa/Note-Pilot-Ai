@@ -17,6 +17,11 @@ export const summarizeTextSchema = z.object({
   text: z.string().min(1).max(20000)
 });
 
+export const assistTextSchema = z.object({
+  text: z.string().min(1).max(20000),
+  question: z.string().trim().min(1).max(2000)
+});
+
 export const summarizeNoteSchema = z.object({
   noteId: z.string().min(1)
 });

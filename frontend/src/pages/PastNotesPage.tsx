@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   History,
@@ -6,6 +6,9 @@ import {
   CalendarDays,
   Clock,
   BookOpen,
+  Upload,
+  FolderOpen,
+  HardDriveUpload,
   Save,
   Sparkles,
   Search,
@@ -16,9 +19,17 @@ import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { getCourseDetail, listCourses, uploadCourseDocument } from "../features/courses/api";
+import {
+  analyzeGoogleClassroomMaterial,
+  getGoogleClassroomMaterialDetail,
+  listGoogleClassroomMaterials
+} from "../features/google-classroom/api";
 import { listTimetableEntries } from "../features/timetable/api";
-import { assistNote, createNote, listNotes, summarizeNote, updateNote } from "../features/notes/api";
+import { createNote, listNotes, summarizeNote, updateNote } from "../features/notes/api";
 import type { TimetableEntry, Note, DayOfWeek } from "../types/domain";
+import { isLikelySameCourse } from "../utils/course-matching";
+import { buildMaterialNoteContent } from "../utils/material-note";
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
   MONDAY: { bg: "bg-teal-100 dark:bg-teal-950/40", text: "text-teal-800 dark:text-teal-200", dot: "bg-teal-600" },
@@ -34,6 +45,19 @@ function formatDay(day: string): string {
   return day.charAt(0) + day.slice(1).toLowerCase();
 }
 
+function buildNoteSection(label: string, content?: string | null) {
+  const trimmed = content?.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return `${label}\n${trimmed}\n`;
+}
+
+type SelectedCourseResource =
+  | { kind: "document"; id: string }
+  | { kind: "material"; id: string };
+
 export function PastNotesPage() {
   const { userId, userReady } = useAuth();
   const { addToast } = useToast();
@@ -45,9 +69,11 @@ export function PastNotesPage() {
   const [noteContent, setNoteContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNoteDraft, setSelectedNoteDraft] = useState("");
-  const [showAIBox, setShowAIBox] = useState(false);
-  const [aiQuestion, setAIQuestion] = useState("");
-  const [aiAnswer, setAIAnswer] = useState("");
+  const [showResourcePanel, setShowResourcePanel] = useState(false);
+  const [resourceMode, setResourceMode] = useState<"menu" | "device" | "course">("menu");
+  const [selectedCourseResource, setSelectedCourseResource] = useState<SelectedCourseResource | null>(null);
+  const deviceUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const resourcePreviewRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch all timetable entries
   const timetableQuery = useQuery({
@@ -104,15 +130,114 @@ export function PastNotesPage() {
     },
   });
 
-  const assistNoteMutation = useMutation({
-    mutationFn: ({ noteId, question }: { noteId: string; question: string }) => assistNote(noteId, question),
-    onSuccess: (result) => {
-      setAIAnswer(result.answer);
+  const coursesQuery = useQuery({
+    queryKey: ["courses", userId],
+    queryFn: listCourses,
+    enabled: userReady,
+    retry: false
+  });
+
+  const classroomMaterialsQuery = useQuery({
+    queryKey: ["google-classroom-materials", userId],
+    queryFn: listGoogleClassroomMaterials,
+    enabled: userReady,
+    retry: false
+  });
+
+  const matchedCourse = useMemo(() => {
+    if (!selectedEntry) {
+      return null;
+    }
+
+    return (
+      (coursesQuery.data ?? []).find((course) => isLikelySameCourse(course.name, selectedEntry.subjectName)) ?? null
+    );
+  }, [coursesQuery.data, selectedEntry]);
+
+  const courseDetailQuery = useQuery({
+    queryKey: ["course-detail", matchedCourse?.id, userId],
+    queryFn: () => getCourseDetail(matchedCourse!.id),
+    enabled: Boolean(matchedCourse?.id) && userReady
+  });
+
+  const uploadCourseDocumentMutation = useMutation({
+    mutationFn: ({ courseId, file }: { courseId: string; file: File }) => uploadCourseDocument(courseId, file),
+    onSuccess: async () => {
+      if (matchedCourse?.id) {
+        await queryClient.invalidateQueries({
+          queryKey: ["course-detail", matchedCourse.id, userId]
+        });
+      }
+      addToast("File uploaded to this course", "success");
+      setShowResourcePanel(true);
+      setResourceMode("course");
     },
     onError: (error) => {
-      addToast((error as Error).message || "Failed to ask AI about this note", "error");
-    },
+      addToast((error as Error).message || "Failed to upload file", "error");
+    }
   });
+
+  const selectedDocument = useMemo(() => {
+    if (selectedCourseResource?.kind !== "document") {
+      return null;
+    }
+
+    return (
+      courseDetailQuery.data?.documents.find((document) => document.id === selectedCourseResource.id) ?? null
+    );
+  }, [courseDetailQuery.data?.documents, selectedCourseResource]);
+
+  const materialDetailQuery = useQuery({
+    queryKey: ["google-classroom-material-detail", selectedCourseResource?.kind === "material" ? selectedCourseResource.id : null, userId],
+    queryFn: () => getGoogleClassroomMaterialDetail(selectedCourseResource!.id),
+    enabled: showResourcePanel && resourceMode === "course" && selectedCourseResource?.kind === "material" && userReady,
+    retry: false
+  });
+
+  const analyzeMaterialMutation = useMutation({
+    mutationFn: analyzeGoogleClassroomMaterial,
+    onSuccess: async (_, materialId) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["google-classroom-material-detail", materialId, userId]
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["google-classroom-materials", userId]
+      });
+      addToast("Material summary generated", "success");
+    },
+    onError: (error) => {
+      addToast((error as Error).message || "Failed to summarize material", "error");
+    }
+  });
+
+  const relatedCourseNotes = useMemo(() => {
+    if (!selectedEntry) {
+      return [];
+    }
+
+    if (courseDetailQuery.data?.notes?.length) {
+      return courseDetailQuery.data.notes;
+    }
+
+    return (notesQuery.data ?? []).map((note) => ({
+      ...note,
+      timetableEntry: selectedEntry
+    }));
+  }, [courseDetailQuery.data?.notes, notesQuery.data, selectedEntry]);
+
+  const relatedClassroomMaterials = useMemo(() => {
+    if (!selectedEntry) {
+      return [];
+    }
+
+    if (courseDetailQuery.data?.googleClassroomMaterials?.length) {
+      return courseDetailQuery.data.googleClassroomMaterials;
+    }
+
+    return (classroomMaterialsQuery.data ?? []).filter((material) =>
+      isLikelySameCourse(material.courseName ?? "", selectedEntry.subjectName)
+    );
+  }, [classroomMaterialsQuery.data, courseDetailQuery.data?.googleClassroomMaterials, selectedEntry]);
 
   const entries = timetableQuery.data ?? [];
   const preselectedEntryId = searchParams.get("timetableId");
@@ -161,9 +286,8 @@ export function PastNotesPage() {
         setSelectedNote(null);
       }
       setSelectedNoteDraft("");
-      setShowAIBox(false);
-      setAIQuestion("");
-      setAIAnswer("");
+      setShowResourcePanel(false);
+      setResourceMode("menu");
       return;
     }
 
@@ -194,9 +318,8 @@ export function PastNotesPage() {
 
   useEffect(() => {
     setSelectedNoteDraft(selectedNote?.content ?? "");
-    setShowAIBox(false);
-    setAIQuestion("");
-    setAIAnswer("");
+    setShowResourcePanel(false);
+    setResourceMode("menu");
   }, [selectedNote?.id]);
 
   function handleSelectEntry(entry: TimetableEntry) {
@@ -204,6 +327,39 @@ export function PastNotesPage() {
     setSelectedNote(null);
     setNoteContent("");
     setSearchParams({ timetableId: entry.id }, { replace: true });
+  }
+
+  function handleOpenResourceMode(mode: "device" | "course") {
+    setShowResourcePanel(true);
+    setResourceMode(mode);
+    if (mode !== "course") {
+      setSelectedCourseResource(null);
+    }
+  }
+
+  function handleSelectCourseResource(resource: SelectedCourseResource) {
+    setSelectedCourseResource(resource);
+
+    requestAnimationFrame(() => {
+      resourcePreviewRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest"
+      });
+    });
+  }
+
+  function handleDeviceUploadSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !matchedCourse?.id) {
+      return;
+    }
+
+    void uploadCourseDocumentMutation.mutateAsync({
+      courseId: matchedCourse.id,
+      file
+    });
   }
 
   async function handleSaveNote() {
@@ -224,12 +380,14 @@ export function PastNotesPage() {
     });
   }
 
-  async function handleAskAIAboutSelectedNote() {
-    if (!selectedNote || !aiQuestion.trim()) return;
+  function appendResourceToNote(section: string) {
+    if (!section.trim()) {
+      return;
+    }
 
-    await assistNoteMutation.mutateAsync({
-      noteId: selectedNote.id,
-      question: aiQuestion.trim()
+    setSelectedNoteDraft((current) => {
+      const normalizedCurrent = current.trimEnd();
+      return normalizedCurrent ? `${normalizedCurrent}\n\n${section.trim()}` : section.trim();
     });
   }
 
@@ -483,11 +641,11 @@ export function PastNotesPage() {
       {selectedNote && selectedEntry && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px]"
+            className="fixed inset-x-0 bottom-0 top-[73px] z-40 bg-slate-950/30 backdrop-blur-[2px] lg:left-72"
             onClick={() => setSelectedNote(null)}
           />
-          <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col border-l border-stone-200 bg-white shadow-[0_24px_80px_-30px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950">
-            <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5 dark:border-slate-800">
+          <aside className="fixed bottom-0 right-0 top-[73px] z-50 flex w-full max-w-[min(48rem,calc(100vw-1.5rem))] flex-col overflow-hidden border-l border-stone-200 bg-white shadow-[-24px_0_80px_-40px_rgba(15,23,42,0.42)] sm:max-w-[42rem] lg:right-0 lg:max-w-[44rem] lg:rounded-tl-[32px] dark:border-slate-800 dark:bg-slate-950">
+            <div className="flex flex-col gap-4 border-b border-stone-200 bg-white/92 px-5 py-5 backdrop-blur sm:px-6 lg:flex-row lg:items-start lg:justify-between dark:border-slate-800 dark:bg-slate-950/92">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                   Full Note
@@ -510,13 +668,23 @@ export function PastNotesPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <input
+                  ref={deviceUploadInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleDeviceUploadSelection}
+                />
                 <button
                   type="button"
-                  onClick={() => setShowAIBox((current) => !current)}
+                  onClick={() => {
+                    setShowResourcePanel((current) => !current);
+                    setResourceMode("menu");
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  / AI
+                  <Upload className="h-4 w-4" />
+                  Upload
                 </button>
                 {!selectedNote.summary && (
                   <button
@@ -540,38 +708,353 @@ export function PastNotesPage() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-6">
               <div className="space-y-5">
-                {showAIBox && (
+                {showResourcePanel && (
                   <div className="rounded-3xl border border-stone-200 bg-stone-50/70 p-5 dark:border-slate-800 dark:bg-slate-900/60">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Ask AI About This Note
-                    </p>
-                    <div className="mt-3 space-y-3">
-                      <input
-                        value={aiQuestion}
-                        onChange={(event) => setAIQuestion(event.target.value)}
-                        placeholder="Ask a question about this note..."
-                        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-stone-400 focus:border-teal-700/40 focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
-                      />
-                      <div className="flex justify-end">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                          Course Resources
+                        </p>
+                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                          Current class: <span className="font-semibold">{selectedEntry.subjectName}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowResourcePanel(false);
+                          setResourceMode("menu");
+                          setSelectedCourseResource(null);
+                        }}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    {resourceMode === "menu" && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <button
                           type="button"
-                          onClick={() => void handleAskAIAboutSelectedNote()}
-                          disabled={!aiQuestion.trim() || assistNoteMutation.isPending}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
+                          onClick={() => handleOpenResourceMode("device")}
+                          className="rounded-2xl border border-stone-200 bg-white p-4 text-left transition-colors hover:border-stone-300 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-slate-600"
                         >
-                          {assistNoteMutation.isPending ? "Thinking..." : "Ask AI"}
+                          <HardDriveUpload className="h-5 w-5 text-teal-700 dark:text-teal-300" />
+                          <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            Upload from device
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Add a file from this device into the current course context.
+                          </p>
+                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenResourceMode("course")}
+                          className="rounded-2xl border border-stone-200 bg-white p-4 text-left transition-colors hover:border-stone-300 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-slate-600"
+                        >
+                          <FolderOpen className="h-5 w-5 text-amber-700 dark:text-amber-300" />
+                          <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            From course
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Browse notes, PDFs, and Classroom materials from this selected class.
+                          </p>
                         </button>
                       </div>
-                      {aiAnswer && (
-                        <div className="rounded-2xl bg-white p-4 dark:bg-slate-950">
-                          <p className="whitespace-pre-wrap text-sm leading-7 text-slate-800 dark:text-slate-200">
-                            {aiAnswer}
+                    )}
+
+                    {resourceMode === "device" && (
+                      <div className="mt-4 space-y-3">
+                        {matchedCourse ? (
+                          <>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">
+                              Upload into <span className="font-semibold">{matchedCourse.name}</span>.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => deviceUploadInputRef.current?.click()}
+                              disabled={uploadCourseDocumentMutation.isPending}
+                              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
+                            >
+                              <Upload className="h-4 w-4" />
+                              {uploadCourseDocumentMutation.isPending ? "Uploading..." : "Choose file from device"}
+                            </button>
+                          </>
+                        ) : (
+                          <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            No matching course record was found for this class yet, so device uploads are not available here.
                           </p>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
+
+                    {resourceMode === "course" && (
+                      <div className="mt-4 space-y-4">
+                        {courseDetailQuery.isLoading ? (
+                          <div className="space-y-2">
+                            <div className="skeleton h-20 w-full rounded-2xl" />
+                            <div className="skeleton h-20 w-full rounded-2xl" />
+                          </div>
+                        ) : !matchedCourse || !courseDetailQuery.data ? (
+                          <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-5 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                            No linked course content was found for this class yet.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                Course
+                              </p>
+                              <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                                {courseDetailQuery.data.course.name}
+                              </p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                Course Notes
+                              </p>
+                              {relatedCourseNotes.length === 0 ? (
+                                <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                  No related notes found.
+                                </p>
+                              ) : (
+                                relatedCourseNotes.slice(0, 4).map((note) => (
+                                  <div
+                                    key={note.id}
+                                    className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950"
+                                  >
+                                    <p className="line-clamp-3 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">
+                                      {note.content}
+                                    </p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                PDFs and Handouts
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Click a handout to preview its summary and insert it into your note.
+                              </p>
+                              {courseDetailQuery.data.documents.length === 0 ? (
+                                <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                  No uploaded handouts yet.
+                                </p>
+                              ) : (
+                                courseDetailQuery.data.documents.map((document) => (
+                                  <button
+                                    key={document.id}
+                                    type="button"
+                                    onClick={() => handleSelectCourseResource({ kind: "document", id: document.id })}
+                                    className={clsx(
+                                      "w-full cursor-pointer rounded-2xl border bg-white p-4 text-left transition-colors dark:bg-slate-950",
+                                      selectedCourseResource?.kind === "document" && selectedCourseResource.id === document.id
+                                        ? "border-teal-700/30 shadow-sm dark:border-teal-400/40"
+                                        : "border-stone-200 hover:border-stone-300 dark:border-slate-700 dark:hover:border-slate-600"
+                                    )}
+                                  >
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                      {document.fileName}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                      {document.mimeType}
+                                    </p>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                Classroom Materials
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                Click a synced material to open its summary and attachments below.
+                              </p>
+                              {relatedClassroomMaterials.length === 0 ? (
+                                <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                  No synced Classroom materials yet.
+                                </p>
+                              ) : (
+                                relatedClassroomMaterials.map((material) => (
+                                  <button
+                                    key={material.id}
+                                    type="button"
+                                    onClick={() => handleSelectCourseResource({ kind: "material", id: material.id })}
+                                    className={clsx(
+                                      "w-full cursor-pointer rounded-2xl border bg-white p-4 text-left transition-colors dark:bg-slate-950",
+                                      selectedCourseResource?.kind === "material" && selectedCourseResource.id === material.id
+                                        ? "border-teal-700/30 shadow-sm dark:border-teal-400/40"
+                                        : "border-stone-200 hover:border-stone-300 dark:border-slate-700 dark:hover:border-slate-600"
+                                    )}
+                                  >
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                      {material.title}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                      {material.attachments[0]?.title || material.sourceType}
+                                    </p>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+
+                            {selectedDocument ? (
+                              <div
+                                ref={resourcePreviewRef}
+                                className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-900/40 dark:bg-teal-950/20"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">
+                                      Handout Summary
+                                    </p>
+                                    <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                      {selectedDocument.fileName}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      appendResourceToNote(
+                                        buildNoteSection(
+                                          `Handout summary: ${selectedDocument.fileName}`,
+                                          selectedDocument.syllabusSummary ||
+                                            selectedDocument.evaluationCriteria ||
+                                            selectedDocument.extractedText?.slice(0, 1200) ||
+                                            ""
+                                        )
+                                      )
+                                    }
+                                    className="rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-800 transition-colors hover:bg-teal-50 dark:border-teal-900/50 dark:bg-teal-950/30 dark:text-teal-200 dark:hover:bg-teal-950/40"
+                                  >
+                                    Add to note
+                                  </button>
+                                </div>
+                                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700 dark:text-slate-200">
+                                  {selectedDocument.syllabusSummary ||
+                                    selectedDocument.evaluationCriteria ||
+                                    selectedDocument.extractedText?.slice(0, 800) ||
+                                    "No extracted summary is available for this handout yet."}
+                                  {selectedDocument.extractedText && selectedDocument.extractedText.length > 800 ? "..." : ""}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {selectedCourseResource?.kind === "material" ? (
+                              materialDetailQuery.isLoading ? (
+                                <div ref={resourcePreviewRef} className="space-y-2">
+                                  <div className="skeleton h-24 w-full rounded-2xl" />
+                                  <div className="skeleton h-20 w-full rounded-2xl" />
+                                </div>
+                              ) : materialDetailQuery.data ? (
+                                <div
+                                  ref={resourcePreviewRef}
+                                  className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-900/40 dark:bg-teal-950/20"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-300">
+                                        Material Summary
+                                      </p>
+                                      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                        {materialDetailQuery.data.title}
+                                      </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {materialDetailQuery.data.analysis?.summary || materialDetailQuery.data.extractedText ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            appendResourceToNote(
+                                              buildNoteSection(
+                                                `Classroom material: ${materialDetailQuery.data.title}`,
+                                                buildMaterialNoteContent({
+                                                  title: materialDetailQuery.data.title,
+                                                  analysis: materialDetailQuery.data.analysis,
+                                                  extractedText: materialDetailQuery.data.extractedText,
+                                                  description: materialDetailQuery.data.description,
+                                                  attachments: materialDetailQuery.data.attachments
+                                                })
+                                              )
+                                            )
+                                          }
+                                          className="rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-800 transition-colors hover:bg-teal-50 dark:border-teal-900/50 dark:bg-teal-950/30 dark:text-teal-200 dark:hover:bg-teal-950/40"
+                                        >
+                                          Add to note
+                                        </button>
+                                      ) : null}
+                                      {!materialDetailQuery.data.analysis ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => void analyzeMaterialMutation.mutateAsync(materialDetailQuery.data.id)}
+                                          disabled={analyzeMaterialMutation.isPending}
+                                          className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
+                                        >
+                                          {analyzeMaterialMutation.isPending ? "Summarizing..." : "Summarize"}
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700 dark:text-slate-200">
+                                    {materialDetailQuery.data.analysis?.summary ||
+                                      materialDetailQuery.data.extractedText?.slice(0, 800) ||
+                                      materialDetailQuery.data.description ||
+                                      "No summary is available for this material yet."}
+                                    {materialDetailQuery.data.extractedText &&
+                                    !materialDetailQuery.data.analysis?.summary &&
+                                    materialDetailQuery.data.extractedText.length > 800
+                                      ? "..."
+                                      : ""}
+                                  </p>
+
+                                  {materialDetailQuery.data.attachments.length > 0 ? (
+                                    <div className="mt-4 space-y-2">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                        Attachments
+                                      </p>
+                                      {materialDetailQuery.data.attachments.map((attachment) => (
+                                        <div
+                                          key={attachment.id}
+                                          className="rounded-xl border border-stone-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-950"
+                                        >
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                                {attachment.title || "Untitled attachment"}
+                                              </p>
+                                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                                {attachment.mimeType || attachment.attachmentType}
+                                              </p>
+                                            </div>
+                                            {attachment.url ? (
+                                              <a
+                                                href={attachment.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-xs font-semibold text-teal-800 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200"
+                                              >
+                                                Open
+                                              </a>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

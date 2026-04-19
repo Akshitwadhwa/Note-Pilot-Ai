@@ -94,6 +94,7 @@ type DashboardItem = {
   courseName: string | null;
   description: string | null;
   alternateLink: string | null;
+  referenceAt: string;
   displayAt: string;
   timingLabel: "due" | "posted";
   workType: string | null;
@@ -286,6 +287,37 @@ function formatSourceText(input: {
   }
 
   return lines.join("\n\n").trim();
+}
+
+function normalizeStoredAttachments(
+  attachments: Array<typeof googleClassroomMaterialAttachments.$inferSelect>
+): NormalizedAttachment[] {
+  return attachments.map((attachment) => ({
+    attachmentType: attachment.attachmentType,
+    title: attachment.title,
+    url: attachment.url,
+    driveFileId: attachment.driveFileId,
+    mimeType: attachment.mimeType,
+    thumbnailUrl: attachment.thumbnailUrl,
+    metadata:
+      attachment.metadata && typeof attachment.metadata === "object"
+        ? (attachment.metadata as Record<string, unknown>)
+        : null
+  }));
+}
+
+function buildMaterialSourceText(
+  material: typeof googleClassroomMaterials.$inferSelect,
+  attachments: Array<typeof googleClassroomMaterialAttachments.$inferSelect>
+) {
+  return formatSourceText({
+    courseName: material.courseName,
+    title: material.title,
+    description: material.description,
+    extractedText: material.extractedText,
+    sourceType: material.sourceType,
+    attachments: normalizeStoredAttachments(attachments)
+  });
 }
 
 function clampQuestionCount(value: number) {
@@ -907,7 +939,7 @@ async function upsertMaterial(input: UpsertMaterialInput) {
     }
   });
 
-  return { inserted: !existing, updated: Boolean(existing) };
+  return { materialId, inserted: !existing, updated: Boolean(existing) };
 }
 
 async function hydrateMaterials(userId: string, materialRows: Array<typeof googleClassroomMaterials.$inferSelect>) {
@@ -1121,6 +1153,9 @@ export async function syncGoogleClassroom(userId: string): Promise<SyncResult> {
         sourceUpdatedAt: normalizeGoogleDate(announcement.updateTime ?? announcement.creationTime),
         attachments
       });
+      if (result.materialId && attachments.length > 0) {
+        await autoAnalyzeMaterialAfterSync(userId, result.materialId);
+      }
       if (result.inserted) inserted += 1;
       if (result.updated) updated += 1;
     }
@@ -1160,6 +1195,9 @@ export async function syncGoogleClassroom(userId: string): Promise<SyncResult> {
         sourceUpdatedAt: normalizeGoogleDate(work.updateTime ?? work.creationTime),
         attachments
       });
+      if (result.materialId && attachments.length > 0) {
+        await autoAnalyzeMaterialAfterSync(userId, result.materialId);
+      }
       if (result.inserted) inserted += 1;
       if (result.updated) updated += 1;
     }
@@ -1196,6 +1234,9 @@ export async function syncGoogleClassroom(userId: string): Promise<SyncResult> {
         sourceUpdatedAt: normalizeGoogleDate(material.updateTime ?? material.creationTime),
         attachments
       });
+      if (result.materialId && attachments.length > 0) {
+        await autoAnalyzeMaterialAfterSync(userId, result.materialId);
+      }
       if (result.inserted) inserted += 1;
       if (result.updated) updated += 1;
     }
@@ -1329,6 +1370,7 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
         courseName: material.courseName,
         description: material.description,
         alternateLink: material.alternateLink,
+        referenceAt: (material.sourceUpdatedAt ?? material.publishedAt ?? material.createdAt).toISOString(),
         displayAt: dueAt.toISOString(),
         timingLabel: "due" as const,
         workType: getMaterialWorkType(material),
@@ -1350,6 +1392,7 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
         courseName: material.courseName,
         description: material.description,
         alternateLink: material.alternateLink,
+        referenceAt: (material.sourceUpdatedAt ?? material.publishedAt ?? material.createdAt).toISOString(),
         displayAt: displayAt.toISOString(),
         timingLabel,
         workType: getMaterialWorkType(material),
@@ -1499,7 +1542,11 @@ export async function listGoogleClassroomQuizPrep(userId: string) {
   });
 }
 
-export async function analyzeGoogleClassroomMaterial(userId: string, materialId: string) {
+async function upsertMaterialAnalysis(
+  userId: string,
+  materialId: string,
+  options?: { force?: boolean; requireExtractedText?: boolean }
+) {
   const material = await getOwnedMaterial(userId, materialId);
   const attachments = await db.query.googleClassroomMaterialAttachments.findMany({
     where: and(
@@ -1508,25 +1555,18 @@ export async function analyzeGoogleClassroomMaterial(userId: string, materialId:
     )
   });
 
-  const sourceText = formatSourceText({
-    courseName: material.courseName,
-    title: material.title,
-    description: material.description,
-    extractedText: material.extractedText,
-    sourceType: material.sourceType,
-    attachments: attachments.map((attachment) => ({
-      attachmentType: attachment.attachmentType,
-      title: attachment.title,
-      url: attachment.url,
-      driveFileId: attachment.driveFileId,
-      mimeType: attachment.mimeType,
-      thumbnailUrl: attachment.thumbnailUrl,
-      metadata:
-        attachment.metadata && typeof attachment.metadata === "object"
-          ? (attachment.metadata as Record<string, unknown>)
-          : null
-    }))
+  if (options?.requireExtractedText && !material.extractedText?.trim()) {
+    return null;
+  }
+
+  const sourceText = buildMaterialSourceText(material, attachments);
+  const existing = await db.query.materialAiAnalyses.findFirst({
+    where: and(eq(materialAiAnalyses.userId, userId), eq(materialAiAnalyses.materialId, material.id))
   });
+
+  if (!options?.force && existing?.sourceText === sourceText) {
+    return existing;
+  }
 
   const response = await ensureOpenAI().chat.completions.create({
     model: env.openaiModel,
@@ -1574,10 +1614,6 @@ export async function analyzeGoogleClassroomMaterial(userId: string, materialId:
     throw new AppError("Analysis summary is empty", 502);
   }
 
-  const existing = await db.query.materialAiAnalyses.findFirst({
-    where: and(eq(materialAiAnalyses.userId, userId), eq(materialAiAnalyses.materialId, material.id))
-  });
-
   if (existing) {
     const updated = await db
       .update(materialAiAnalyses)
@@ -1610,6 +1646,91 @@ export async function analyzeGoogleClassroomMaterial(userId: string, materialId:
     .returning();
 
   return inserted[0];
+}
+
+async function autoAnalyzeMaterialAfterSync(userId: string, materialId: string) {
+  try {
+    await upsertMaterialAnalysis(userId, materialId, {
+      force: false,
+      requireExtractedText: true
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown auto-analysis error";
+    console.warn(`[google-classroom] Auto-analysis skipped for material ${materialId}: ${message}`);
+  }
+}
+
+export async function analyzeGoogleClassroomMaterial(userId: string, materialId: string) {
+  const analysis = await upsertMaterialAnalysis(userId, materialId, {
+    force: true,
+    requireExtractedText: false
+  });
+
+  if (!analysis) {
+    throw new AppError("Analysis could not be generated for this material", 422);
+  }
+
+  return analysis;
+}
+
+export async function askGoogleClassroomMaterial(userId: string, materialId: string, question: string) {
+  const material = await getOwnedMaterial(userId, materialId);
+  const attachments = await db.query.googleClassroomMaterialAttachments.findMany({
+    where: and(
+      eq(googleClassroomMaterialAttachments.userId, userId),
+      eq(googleClassroomMaterialAttachments.materialId, material.id)
+    )
+  });
+
+  const sourceText = formatSourceText({
+    courseName: material.courseName,
+    title: material.title,
+    description: material.description,
+    extractedText: material.extractedText,
+    sourceType: material.sourceType,
+    attachments: attachments.map((attachment) => ({
+      attachmentType: attachment.attachmentType,
+      title: attachment.title,
+      url: attachment.url,
+      driveFileId: attachment.driveFileId,
+      mimeType: attachment.mimeType,
+      thumbnailUrl: attachment.thumbnailUrl,
+      metadata:
+        attachment.metadata && typeof attachment.metadata === "object"
+          ? (attachment.metadata as Record<string, unknown>)
+          : null
+    }))
+  });
+
+  if (!sourceText.trim()) {
+    throw new AppError("This material does not have readable extracted text yet", 422);
+  }
+
+  const response = await ensureOpenAI().chat.completions.create({
+    model: env.openaiModel,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You answer questions about Google Classroom materials. Use only the provided material text. If the answer is not supported by the material, say that clearly."
+      },
+      {
+        role: "user",
+        content: `Material text:\n\n${sourceText}\n\nQuestion:\n${question}`
+      }
+    ]
+  });
+
+  const answer = response.choices[0]?.message?.content?.trim();
+  if (!answer) {
+    throw new AppError("Model returned an empty answer", 502);
+  }
+
+  return {
+    materialId,
+    answer
+  };
 }
 
 export async function generateGoogleClassroomMaterialQuiz(

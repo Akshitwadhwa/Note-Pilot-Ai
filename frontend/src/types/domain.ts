@@ -91,6 +91,7 @@ export type CourseNote = Note & {
 export type CourseDetail = {
   course: Course;
   timetableEntries: TimetableEntry[];
+  documents: CourseDocument[];
   googleClassroomMaterials: GoogleClassroomMaterial[];
   notes: CourseNote[];
 };
@@ -229,6 +230,7 @@ export type GoogleClassroomDashboardItem = {
   courseName?: string | null;
   description?: string | null;
   alternateLink?: string | null;
+  referenceAt: string;
   displayAt: string;
   timingLabel: "due" | "posted";
   workType?: string | null;
