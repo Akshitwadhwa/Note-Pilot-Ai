@@ -26,6 +26,34 @@ function getTrailingSlashTrigger(value: string) {
   return match?.[1] ?? null;
 }
 
+function getFilteredCommands(trigger: string | null) {
+  const normalized = (trigger ?? "/").toLowerCase();
+
+  return [
+    {
+      id: "ask-ai" as const,
+      label: "/ask ai",
+      description: "Ask AI about the note you are writing.",
+      icon: Brain,
+      iconClassName: "bg-teal-100 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200"
+    },
+    {
+      id: "material" as const,
+      label: "/material",
+      description: "Open classroom materials from this class.",
+      icon: FileStack,
+      iconClassName: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+    }
+  ].filter((command) => {
+    if (normalized === "/") {
+      return true;
+    }
+
+    const searchable = `${command.label} ${command.description}`.toLowerCase();
+    return searchable.includes(normalized.slice(1));
+  });
+}
+
 export function NoteComposer({
   activeClass,
   notes,
@@ -44,6 +72,8 @@ export function NoteComposer({
   const [commandAnswer, setCommandAnswer] = useState("");
   const [selectedMaterialId, setSelectedMaterialId] = useState("");
   const [commandLoading, setCommandLoading] = useState(false);
+  const slashTrigger = useMemo(() => getTrailingSlashTrigger(content), [content]);
+  const filteredCommands = useMemo(() => getFilteredCommands(slashTrigger), [slashTrigger]);
 
   useEffect(() => {
     setContent("");
@@ -91,13 +121,17 @@ export function NoteComposer({
   }
 
   async function handleAskAI() {
-    if (!onAssistText || !content.trim() || !question.trim()) {
+    if (!onAssistText || !question.trim()) {
       return;
     }
 
+    const sourceText = content.trim()
+      ? content.trim()
+      : `Current class: ${activeClass?.subjectName ?? "Unknown class"}`;
+
     setCommandLoading(true);
     try {
-      const result = await onAssistText({ text: content.trim(), question: question.trim() });
+      const result = await onAssistText({ text: sourceText, question: question.trim() });
       setCommandAnswer(result.answer);
     } finally {
       setCommandLoading(false);
@@ -150,65 +184,44 @@ export function NoteComposer({
       ) : (
         <>
           <form className="space-y-3" onSubmit={handleSubmit}>
-            <textarea
-              value={content}
-              onChange={(event) => handleContentChange(event.target.value)}
-              rows={5}
-              placeholder={`Write notes for ${activeClass.subjectName}...${enableSlashCommands ? " Type / anywhere for commands." : ""}`}
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15"
-            />
+            <div className="relative">
+              <textarea
+                value={content}
+                onChange={(event) => handleContentChange(event.target.value)}
+                rows={5}
+                placeholder={`Write notes for ${activeClass.subjectName}...${enableSlashCommands ? " Type / anywhere for commands." : ""}`}
+                className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15"
+              />
 
-            {enableSlashCommands && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-stone-200 bg-stone-50/50 px-4 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
-                <span>Type `/` in the editor to open commands.</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCommandMenu((current) => !current);
-                    setActiveCommand(null);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <Slash className="h-3.5 w-3.5" />
-                  Commands
-                </button>
-              </div>
-            )}
+              {showCommandMenu && enableSlashCommands && filteredCommands.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                  {filteredCommands.map((command) => {
+                    const Icon = command.icon;
 
-            {showCommandMenu && enableSlashCommands && (
-              <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                <button
-                  type="button"
-                  onClick={() => handleCommandSelect("ask-ai")}
-                  className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-stone-100 dark:hover:bg-slate-800"
-                >
-                  <div className="rounded-lg bg-teal-100 p-2 text-teal-800 dark:bg-teal-950/50 dark:text-teal-200">
-                    <Brain className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">/ask ai</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Ask AI about the note you are writing.
-                    </p>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCommandSelect("material")}
-                  className="mt-1 flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-stone-100 dark:hover:bg-slate-800"
-                >
-                  <div className="rounded-lg bg-amber-100 p-2 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-                    <FileStack className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">/material</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Open Classroom materials from this class and ask questions or summarize them.
-                    </p>
-                  </div>
-                </button>
-              </div>
-            )}
+                    return (
+                      <button
+                        key={command.id}
+                        type="button"
+                        onClick={() => handleCommandSelect(command.id)}
+                        className="flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-stone-100 dark:hover:bg-slate-800"
+                      >
+                        <div className={clsx("rounded-lg p-2", command.iconClassName)}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                            {command.label}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {command.description}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {enableSlashCommands && activeCommand === "ask-ai" && (
               <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/60">
@@ -222,7 +235,11 @@ export function NoteComposer({
                 <input
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
-                  placeholder={content.trim() ? "Ask AI about this note..." : "Add some note text first, then ask a question."}
+                  placeholder={
+                    content.trim()
+                      ? "Ask AI about this note..."
+                      : `Ask AI to draft notes for ${activeClass.subjectName}...`
+                  }
                   className="mt-3 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-stone-400 focus:border-teal-700/40 focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
                 <div className="mt-3 flex justify-between gap-3">
@@ -236,7 +253,7 @@ export function NoteComposer({
                   <button
                     type="button"
                     onClick={() => void handleAskAI()}
-                    disabled={!content.trim() || !question.trim() || commandLoading}
+                    disabled={!question.trim() || commandLoading}
                     className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
                   >
                     {commandLoading ? "Thinking..." : "Ask AI"}

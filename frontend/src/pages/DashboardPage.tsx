@@ -103,19 +103,6 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [lastImportResult, setLastImportResult] = useState<TimetableImportResult | null>(null);
   const [selectedAlertView, setSelectedAlertView] = useState<"all" | "assignments" | "quizzes">("all");
-  const dashboardSeenCutoff = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    const raw = window.localStorage.getItem(`google-classroom-dashboard-last-viewed:${userId}`);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = new Date(raw);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }, [userId]);
 
   const currentClassQuery = useQuery({
     queryKey: ["current-class", userId],
@@ -227,7 +214,7 @@ export function DashboardPage() {
     void importTimetableMutation.mutateAsync(file);
   }
 
-  const filteredDashboardUpdates = useMemo(() => {
+  const dashboardUpdates = useMemo(() => {
     const data = classroomDashboardQuery.data;
     if (!data) {
       return {
@@ -236,38 +223,33 @@ export function DashboardPage() {
       };
     }
 
-    const filterItems = (items: GoogleClassroomDashboardItem[]) =>
-      dashboardSeenCutoff
-        ? items.filter((item) => new Date(item.referenceAt).getTime() > dashboardSeenCutoff.getTime())
-        : items;
-
     return {
-      assignments: filterItems(data.upcomingAssignments),
-      quizzes: filterItems(data.upcomingQuizzes)
+      assignments: data.upcomingAssignments,
+      quizzes: data.upcomingQuizzes
     };
-  }, [classroomDashboardQuery.data, dashboardSeenCutoff]);
+  }, [classroomDashboardQuery.data]);
 
   const selectedAlertItems = useMemo(() => {
     if (selectedAlertView === "assignments") {
-      return filteredDashboardUpdates.assignments;
+      return dashboardUpdates.assignments;
     }
 
     if (selectedAlertView === "quizzes") {
-      return filteredDashboardUpdates.quizzes;
+      return dashboardUpdates.quizzes;
     }
 
-    return [...filteredDashboardUpdates.assignments, ...filteredDashboardUpdates.quizzes].sort(
+    return [...dashboardUpdates.assignments, ...dashboardUpdates.quizzes].sort(
       (a, b) => new Date(a.displayAt).getTime() - new Date(b.displayAt).getTime()
     );
-  }, [filteredDashboardUpdates, selectedAlertView]);
+  }, [dashboardUpdates, selectedAlertView]);
 
-  const newUpdateCounts = useMemo(
+  const upcomingCounts = useMemo(
     () => ({
-      totalUpcomingCount: filteredDashboardUpdates.assignments.length + filteredDashboardUpdates.quizzes.length,
-      assignmentsDueCount: filteredDashboardUpdates.assignments.length,
-      quizzesComingCount: filteredDashboardUpdates.quizzes.length
+      totalUpcomingCount: dashboardUpdates.assignments.length + dashboardUpdates.quizzes.length,
+      assignmentsDueCount: dashboardUpdates.assignments.length,
+      quizzesComingCount: dashboardUpdates.quizzes.length
     }),
-    [filteredDashboardUpdates]
+    [dashboardUpdates]
   );
 
   const focusedSchedule = useMemo(() => {
@@ -310,18 +292,6 @@ export function DashboardPage() {
       entries: [] as TimetableEntry[]
     };
   }, [timetableQuery.data]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !userReady || !classroomDashboardQuery.data) {
-      return;
-    }
-
-    if (autoSyncGoogleClassroomMutation.isPending) {
-      return;
-    }
-
-    window.localStorage.setItem(`google-classroom-dashboard-last-viewed:${userId}`, new Date().toISOString());
-  }, [autoSyncGoogleClassroomMutation.isPending, classroomDashboardQuery.data, userId, userReady]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !userReady) {
@@ -386,10 +356,10 @@ export function DashboardPage() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                  New Google Classroom Updates
+                  Upcoming Google Classroom Updates
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Fresh Classroom changes since your last dashboard visit, synced automatically when you come back.
+                  Upcoming assignments and quizzes from Google Classroom, synced automatically when you come back.
                 </p>
               </div>
             </div>
@@ -423,24 +393,24 @@ export function DashboardPage() {
               <DashboardMetric
                 active={selectedAlertView === "all"}
                 onClick={() => setSelectedAlertView("all")}
-                label="All New"
-                value={newUpdateCounts.totalUpcomingCount}
+                label="All Upcoming"
+                value={upcomingCounts.totalUpcomingCount}
                 icon={BellRing}
                 tone="slate"
               />
               <DashboardMetric
                 active={selectedAlertView === "assignments"}
                 onClick={() => setSelectedAlertView("assignments")}
-                label="New Assignments"
-                value={newUpdateCounts.assignmentsDueCount}
+                label="Assignments Due"
+                value={upcomingCounts.assignmentsDueCount}
                 icon={ClipboardList}
                 tone="amber"
               />
               <DashboardMetric
                 active={selectedAlertView === "quizzes"}
                 onClick={() => setSelectedAlertView("quizzes")}
-                label="New Quizzes"
-                value={newUpdateCounts.quizzesComingCount}
+                label="Upcoming Quizzes"
+                value={upcomingCounts.quizzesComingCount}
                 icon={NotebookTabs}
                 tone="teal"
               />
@@ -457,20 +427,20 @@ export function DashboardPage() {
                 )}
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                   {selectedAlertView === "assignments"
-                    ? "New Assignment Updates"
+                    ? "Upcoming Assignments"
                     : selectedAlertView === "quizzes"
-                      ? "New Quiz Updates"
-                      : "All New Updates"}
+                      ? "Upcoming Quizzes"
+                      : "All Upcoming Updates"}
                 </h3>
               </div>
 
               {selectedAlertItems.length === 0 ? (
                 <div className="rounded-2xl border border-stone-200 p-4 text-sm text-slate-600 dark:border-slate-700 dark:text-slate-300">
                   {selectedAlertView === "assignments"
-                    ? "No new assignment updates were detected since your last visit."
+                    ? "No upcoming assignments were found."
                     : selectedAlertView === "quizzes"
-                      ? "No new quiz updates were detected since your last visit."
-                      : "No new Google Classroom updates were detected since your last visit."}
+                      ? "No upcoming quizzes were found."
+                      : "No upcoming Google Classroom updates were found."}
                 </div>
               ) : (
                 selectedAlertItems.map((item) => (
