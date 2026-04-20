@@ -30,6 +30,7 @@ import { createNote, listNotes, summarizeNote, updateNote } from "../features/no
 import type { TimetableEntry, Note, DayOfWeek } from "../types/domain";
 import { isLikelySameCourse } from "../utils/course-matching";
 import { buildMaterialNoteContent } from "../utils/material-note";
+import { formatSessionDate, getTodayLocalDateValue } from "../utils/date";
 
 const DAY_COLORS: Record<DayOfWeek, { bg: string; text: string; dot: string }> = {
   MONDAY: { bg: "bg-teal-100 dark:bg-teal-950/40", text: "text-teal-800 dark:text-teal-200", dot: "bg-teal-600" },
@@ -68,6 +69,7 @@ export function PastNotesPage() {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [noteContent, setNoteContent] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSessionDate, setSelectedSessionDate] = useState(getTodayLocalDateValue());
   const [selectedNoteDraft, setSelectedNoteDraft] = useState("");
   const [showResourcePanel, setShowResourcePanel] = useState(false);
   const [resourceMode, setResourceMode] = useState<"menu" | "device" | "course">("menu");
@@ -91,7 +93,10 @@ export function PastNotesPage() {
 
   const createNoteMutation = useMutation({
     mutationFn: createNote,
-    onSuccess: async () => {
+    onSuccess: async (savedNote) => {
+      setSelectedNote(savedNote);
+      setSelectedNoteDraft(savedNote.content);
+      setSelectedSessionDate(savedNote.sessionDate);
       await queryClient.invalidateQueries({
         queryKey: ["notes", selectedEntry?.id, userId],
       });
@@ -248,6 +253,20 @@ export function PastNotesPage() {
           e.dayOfWeek.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : entries;
+  const notesGroupedBySessionDate = useMemo(
+    () =>
+      (notesQuery.data ?? []).reduce<Record<string, Note[]>>((acc, note) => {
+        acc[note.sessionDate] ??= [];
+        acc[note.sessionDate].push(note);
+        return acc;
+      }, {}),
+    [notesQuery.data]
+  );
+  const selectedDateNotes = useMemo(
+    () => (notesQuery.data ?? []).filter((note) => note.sessionDate === selectedSessionDate),
+    [notesQuery.data, selectedSessionDate]
+  );
+  const selectedDatePrimaryNote = selectedDateNotes[0] ?? null;
 
   useEffect(() => {
     if (entries.length === 0) {
@@ -263,6 +282,7 @@ export function PastNotesPage() {
         if (selectedEntry?.id !== matchedEntry.id) {
           setSelectedEntry(matchedEntry);
           setNoteContent("");
+          setSelectedSessionDate(getTodayLocalDateValue());
         }
         return;
       }
@@ -326,6 +346,7 @@ export function PastNotesPage() {
     setSelectedEntry(entry);
     setSelectedNote(null);
     setNoteContent("");
+    setSelectedSessionDate(getTodayLocalDateValue());
     setSearchParams({ timetableId: entry.id }, { replace: true });
   }
 
@@ -366,6 +387,7 @@ export function PastNotesPage() {
     if (!selectedEntry || !noteContent.trim()) return;
     await createNoteMutation.mutateAsync({
       timetableId: selectedEntry.id,
+      sessionDate: selectedSessionDate,
       content: noteContent.trim(),
     });
     setNoteContent("");
@@ -390,6 +412,15 @@ export function PastNotesPage() {
       return normalizedCurrent ? `${normalizedCurrent}\n\n${section.trim()}` : section.trim();
     });
   }
+
+  useEffect(() => {
+    if (!selectedEntry) {
+      return;
+    }
+
+    const existingNote = (notesQuery.data ?? []).find((note) => note.sessionDate === selectedSessionDate) ?? null;
+    setNoteContent(existingNote?.content ?? "");
+  }, [notesQuery.data, selectedEntry?.id, selectedSessionDate]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 stagger-children">
@@ -508,30 +539,52 @@ export function PastNotesPage() {
             <>
               {/* Selected class info */}
               <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={clsx(
-                      "flex h-10 w-10 items-center justify-center rounded-2xl",
-                      DAY_COLORS[selectedEntry.dayOfWeek].bg
-                    )}
-                  >
-                    <BookOpen
-                      className={clsx("h-5 w-5", DAY_COLORS[selectedEntry.dayOfWeek].text)}
-                    />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      {selectedEntry.subjectName}
-                    </h2>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <CalendarDays className="h-3 w-3" />
-                      <span>{formatDay(selectedEntry.dayOfWeek)}</span>
-                      <span className="text-slate-300 dark:text-slate-600">·</span>
-                      <Clock className="h-3 w-3" />
-                      <span>
-                        {selectedEntry.startTime} – {selectedEntry.endTime}
-                      </span>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={clsx(
+                        "flex h-10 w-10 items-center justify-center rounded-2xl",
+                        DAY_COLORS[selectedEntry.dayOfWeek].bg
+                      )}
+                    >
+                      <BookOpen
+                        className={clsx("h-5 w-5", DAY_COLORS[selectedEntry.dayOfWeek].text)}
+                      />
                     </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                        {selectedEntry.subjectName}
+                      </h2>
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <CalendarDays className="h-3 w-3" />
+                        <span>{formatDay(selectedEntry.dayOfWeek)}</span>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <Clock className="h-3 w-3" />
+                        <span>
+                          {selectedEntry.startTime} – {selectedEntry.endTime}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/60">
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      Session Date
+                    </label>
+                    <input
+                      type="date"
+                      value={selectedSessionDate}
+                      onChange={(event) => setSelectedSessionDate(event.target.value)}
+                      className="mt-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-teal-700/40 focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-teal-400/40"
+                    />
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      Saving notes for {formatSessionDate(selectedSessionDate)}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-teal-700 dark:text-teal-300">
+                      {selectedDatePrimaryNote
+                        ? "A note already exists for this class date. Saving will update it."
+                        : "No note exists for this class date yet."}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -540,13 +593,13 @@ export function PastNotesPage() {
               <div className="rounded-[28px] border border-[color:var(--app-border)] bg-[color:var(--app-surface)] p-5 shadow-[var(--app-shadow)] backdrop-blur-sm dark:border-[color:var(--app-border)] dark:bg-[color:var(--app-surface)]">
                 <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                   <FileText className="h-4 w-4 text-teal-700 dark:text-teal-300" />
-                  Add Note
+                  {selectedDatePrimaryNote ? "Update Note" : "Add Note"}
                 </h3>
                 <textarea
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
                   rows={4}
-                  placeholder={`Write notes for ${selectedEntry.subjectName}...`}
+                  placeholder={`Write notes for ${selectedEntry.subjectName} on ${formatSessionDate(selectedSessionDate)}...`}
                   className="w-full rounded-2xl border border-stone-200 bg-stone-50/85 px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-stone-400 transition-all duration-200 focus:border-teal-700/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/15 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-teal-400/40 dark:focus:ring-teal-400/15"
                 />
                 <div className="mt-3 flex justify-end">
@@ -559,7 +612,11 @@ export function PastNotesPage() {
                     className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:bg-slate-800 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-700 dark:hover:bg-teal-600"
                   >
                     <Save className="h-4 w-4" />
-                    {createNoteMutation.isPending ? "Saving..." : "Save Note"}
+                    {createNoteMutation.isPending
+                      ? "Saving..."
+                      : selectedDatePrimaryNote
+                        ? `Update ${formatSessionDate(selectedSessionDate)} Note`
+                        : `Save ${formatSessionDate(selectedSessionDate)} Note`}
                   </button>
                 </div>
               </div>
@@ -569,7 +626,7 @@ export function PastNotesPage() {
                 <h3 className="mb-4 flex items-center justify-between">
                   <span className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
                     <History className="h-4 w-4 text-amber-500" />
-                    Saved Notes
+                    Saved Notes By Date
                   </span>
                   {notesQuery.data && notesQuery.data.length > 0 && (
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
@@ -591,45 +648,57 @@ export function PastNotesPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {notesQuery.data.map((note: Note, index) => {
-                      const isActive = selectedNote?.id === note.id;
-                      const preview =
-                        note.content.length > 180 ? `${note.content.slice(0, 180).trim()}...` : note.content;
+                  <div className="space-y-4">
+                    {Object.entries(notesGroupedBySessionDate).map(([sessionDate, sessionNotes]) => (
+                      <div key={sessionDate} className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 px-1">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                            {formatSessionDate(sessionDate)}
+                          </p>
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            {sessionNotes.length} note{sessionNotes.length === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        {sessionNotes.map((note) => {
+                          const isActive = selectedNote?.id === note.id;
+                          const preview =
+                            note.content.length > 180 ? `${note.content.slice(0, 180).trim()}...` : note.content;
 
-                      return (
-                        <button
-                          key={note.id}
-                          type="button"
-                          onClick={() => setSelectedNote(note)}
-                          className={clsx(
-                            "w-full rounded-2xl border p-4 text-left transition-colors",
-                            isActive
-                              ? "border-teal-700/20 bg-teal-50/70 shadow-sm dark:border-teal-400/30 dark:bg-teal-950/20"
-                              : "border-stone-200/80 hover:border-stone-300 dark:border-slate-700/60 dark:hover:border-slate-600"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                Note {notesQuery.data.length - index}
-                              </p>
-                              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
-                                {preview}
-                              </p>
-                            </div>
-                            {isActive && (
-                              <div className="mt-1 h-2 w-2 rounded-full bg-teal-600 dark:bg-teal-300" />
-                            )}
-                          </div>
-                          {note.timestamp && (
-                            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-                              {new Date(note.timestamp).toLocaleString()}
-                            </p>
-                          )}
-                        </button>
-                      );
-                    })}
+                          return (
+                            <button
+                              key={note.id}
+                              type="button"
+                              onClick={() => setSelectedNote(note)}
+                              className={clsx(
+                                "w-full rounded-2xl border p-4 text-left transition-colors",
+                                isActive
+                                  ? "border-teal-700/20 bg-teal-50/70 shadow-sm dark:border-teal-400/30 dark:bg-teal-950/20"
+                                  : "border-stone-200/80 hover:border-stone-300 dark:border-slate-700/60 dark:hover:border-slate-600"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {formatSessionDate(note.sessionDate)}
+                                  </p>
+                                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
+                                    {preview}
+                                  </p>
+                                </div>
+                                {isActive && (
+                                  <div className="mt-1 h-2 w-2 rounded-full bg-teal-600 dark:bg-teal-300" />
+                                )}
+                              </div>
+                              {note.timestamp && (
+                                <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+                                  Saved {new Date(note.timestamp).toLocaleString()}
+                                </p>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -659,6 +728,8 @@ export function PastNotesPage() {
                   <span>
                     {selectedEntry.startTime} - {selectedEntry.endTime}
                   </span>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
+                  <span>{formatSessionDate(selectedNote.sessionDate)}</span>
                   {selectedNote.timestamp && (
                     <>
                       <span className="text-slate-300 dark:text-slate-600">·</span>

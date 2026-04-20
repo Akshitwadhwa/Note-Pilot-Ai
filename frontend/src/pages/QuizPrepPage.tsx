@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleDashed, FolderKanban, NotebookTabs, Trophy } from "lucide-react";
+import { CheckCircle2, CircleDashed, Eye, FolderKanban, NotebookTabs, RotateCcw, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Card } from "../components/common/Card";
@@ -176,9 +176,32 @@ export function QuizPrepPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                  Attempt History
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    Attempt History
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/materials/${quiz.materialId}/quiz`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Attempt again
+                    </Link>
+                    <Link
+                      to={`/materials/${quiz.materialId}/quiz?view=results`}
+                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
+                        quiz.attempts.length > 0
+                          ? "border border-stone-200 text-slate-700 hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          : "cursor-not-allowed border border-stone-200/70 text-slate-400 opacity-60 dark:border-slate-800 dark:text-slate-500 pointer-events-none"
+                      }`}
+                      aria-disabled={quiz.attempts.length === 0}
+                    >
+                      <Eye className="h-4 w-4" />
+                      See results
+                    </Link>
+                  </div>
+                </div>
                 {quiz.attempts.length === 0 ? (
                   <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                     This quiz has been generated but not attempted yet.

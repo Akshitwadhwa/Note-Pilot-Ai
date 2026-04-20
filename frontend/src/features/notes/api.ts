@@ -9,6 +9,7 @@ type ApiResponse<T> = {
 
 type CreateNoteInput = {
   timetableId: string;
+  sessionDate: string;
   content: string;
 };
 
@@ -17,9 +18,12 @@ export async function createNote(input: CreateNoteInput): Promise<Note> {
   return response.data.data;
 }
 
-export async function listNotes(timetableId: string): Promise<Note[]> {
+export async function listNotes(timetableId: string, sessionDate?: string): Promise<Note[]> {
   const response = await apiClient.get<ApiResponse<Note[]>>("/notes", {
-    params: { timetableId }
+    params: {
+      timetableId,
+      ...(sessionDate ? { sessionDate } : {})
+    }
   });
   return response.data.data;
 }

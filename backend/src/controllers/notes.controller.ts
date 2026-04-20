@@ -10,7 +10,7 @@ export async function createNoteController(req: Request, res: Response, next: Ne
       throw new AppError("Unauthorized", 401);
     }
 
-    const note = await createNote(userId, req.body.timetableId, req.body.content);
+    const note = await createNote(userId, req.body.timetableId, req.body.content, req.body.sessionDate);
     res.status(201).json({ success: true, data: note });
   } catch (error) {
     next(error);
@@ -29,7 +29,8 @@ export async function listNotesController(req: Request, res: Response, next: Nex
       throw new AppError("timetableId query param is required", 422);
     }
 
-    const notes = await listNotesByTimetable(userId, timetableId);
+    const sessionDate = typeof req.query.sessionDate === "string" ? req.query.sessionDate : undefined;
+    const notes = await listNotesByTimetable(userId, timetableId, sessionDate);
     res.json({ success: true, data: notes });
   } catch (error) {
     next(error);

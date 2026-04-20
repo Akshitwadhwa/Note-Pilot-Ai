@@ -20,13 +20,12 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import {
   analyzeGoogleClassroomMaterial,
-  generateGoogleClassroomMaterialQuiz,
   generateGoogleClassroomQuizPrep,
-  getGoogleClassroomMaterialDetail,
-  submitGoogleClassroomQuizAttempt
+  getGoogleClassroomMaterialDetail
 } from "../features/google-classroom/api";
 import { createNote, listNotes, summarizeNote } from "../features/notes/api";
 import { listTimetableEntries } from "../features/timetable/api";
+import { formatSessionDate, getTodayLocalDateValue } from "../utils/date";
 import { isLikelySameCourse } from "../utils/course-matching";
 import { buildMaterialNoteContent } from "../utils/material-note";
 
@@ -70,8 +69,6 @@ export function MaterialDetailPage() {
   const { userId, userReady } = useAuth();
   const { addToast } = useToast();
   const queryClient = useQueryClient();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [lastSubmittedQuizId, setLastSubmittedQuizId] = useState<string | null>(null);
   const [prepAnswers, setPrepAnswers] = useState<Record<string, string>>({});
   const [showPrepResults, setShowPrepResults] = useState(false);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
@@ -108,38 +105,6 @@ export function MaterialDetailPage() {
     },
     onError: (error) => {
       addToast((error as Error).message || "Failed to analyze material", "error");
-    }
-  });
-
-  const quizMutation = useMutation({
-    mutationFn: () => generateGoogleClassroomMaterialQuiz(materialId!),
-    onSuccess: async () => {
-      setLastSubmittedQuizId(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["google-classroom-material-detail", materialId, userId]
-      });
-      addToast("Quiz generated", "success");
-    },
-    onError: (error) => {
-      addToast((error as Error).message || "Failed to generate quiz", "error");
-    }
-  });
-
-  const submitAttemptMutation = useMutation({
-    mutationFn: (quizId: string) =>
-      submitGoogleClassroomQuizAttempt(
-        quizId,
-        Object.entries(answers).map(([questionId, answer]) => ({ questionId, answer }))
-      ),
-    onSuccess: async (result) => {
-      setLastSubmittedQuizId(result.quizId);
-      await queryClient.invalidateQueries({
-        queryKey: ["google-classroom-material-detail", materialId, userId]
-      });
-      addToast(`Quiz submitted: ${result.score}/${result.totalQuestions}`, "success");
-    },
-    onError: (error) => {
-      addToast((error as Error).message || "Failed to submit quiz", "error");
     }
   });
 
@@ -187,35 +152,6 @@ export function MaterialDetailPage() {
     }
   });
 
-  const latestQuiz = useMemo(() => detailQuery.data?.quizzes?.[0] ?? null, [detailQuery.data?.quizzes]);
-  const latestAttempt = useMemo(() => {
-    if (!detailQuery.data?.attempts?.length || !latestQuiz) {
-      return null;
-    }
-
-    if (lastSubmittedQuizId) {
-      return (
-        detailQuery.data.attempts.find((attempt) => attempt.quizId === lastSubmittedQuizId) ?? null
-      );
-    }
-
-    return detailQuery.data.attempts.find((attempt) => attempt.quizId === latestQuiz.id) ?? null;
-  }, [detailQuery.data?.attempts, lastSubmittedQuizId, latestQuiz]);
-
-  useEffect(() => {
-    if (!latestQuiz?.questions?.length) {
-      setAnswers({});
-      return;
-    }
-
-    setAnswers(
-      latestQuiz.questions.reduce<Record<string, string>>((acc, question) => {
-        acc[question.id] = "";
-        return acc;
-      }, {})
-    );
-  }, [latestQuiz?.id, latestQuiz?.questions]);
-
   useEffect(() => {
     if (!quizPrepQuery.data?.practiceQuestions?.length) {
       setPrepAnswers({});
@@ -239,6 +175,7 @@ export function MaterialDetailPage() {
 
     await createNoteMutation.mutateAsync({
       timetableId: matchedTimetableEntry.id,
+      sessionDate: getTodayLocalDateValue(),
       content: noteContent.trim()
     });
   }
@@ -659,107 +596,31 @@ export function MaterialDetailPage() {
           <Card title="Quiz" titleIcon={<CheckCircle2 className="h-5 w-5 text-teal-700 dark:text-teal-300" />}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Generate a multiple-choice quiz from this material and submit an attempt directly in the app.
+                Open the dedicated quiz area to generate, retake, or review quiz results for this material.
               </p>
-              <button
-                type="button"
-                onClick={() => void quizMutation.mutateAsync()}
-                disabled={quizMutation.isPending}
+              <Link
+                to={`/materials/${material.id}/quiz`}
                 className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-teal-700 dark:hover:bg-teal-600"
               >
-                {quizMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                {latestQuiz ? "Regenerate quiz" : "Generate quiz"}
-              </button>
+                <Sparkles className="h-4 w-4" />
+                Open quiz area
+              </Link>
             </div>
 
-            {latestQuiz?.questions?.length ? (
+            {material.quizzes.length > 0 ? (
               <div className="mt-5 space-y-6">
                 <div className="rounded-2xl bg-stone-50/90 p-4 dark:bg-slate-900/50">
-                  <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{latestQuiz.title}</p>
+                  <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {material.quizzes[0]?.title ?? "Latest quiz"}
+                  </p>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    {latestQuiz.instructions || "Select one answer for each question."}
+                    This material already has a generated quiz. Open the quiz area to attempt it or see your results.
                   </p>
                 </div>
-
-                {latestQuiz.questions.map((question, index) => (
-                  <div
-                    key={question.id}
-                    className="rounded-2xl border border-[color:var(--app-border)] p-4"
-                  >
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {index + 1}. {question.question}
-                    </p>
-
-                    <div className="mt-4 space-y-2">
-                      {(question.options ?? []).map((option) => (
-                        <label
-                          key={option}
-                          className="flex cursor-pointer items-center gap-3 rounded-xl border border-[color:var(--app-border)] px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-stone-50 dark:text-slate-200 dark:hover:bg-slate-900/40"
-                        >
-                          <input
-                            type="radio"
-                            name={question.id}
-                            value={option}
-                            checked={answers[question.id] === option}
-                            onChange={(event) =>
-                              setAnswers((current) => ({
-                                ...current,
-                                [question.id]: event.target.value
-                              }))
-                            }
-                            className="h-4 w-4"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-
-                    {latestAttempt?.quizId === latestQuiz.id &&
-                    latestAttempt.answers.some((answer) => answer.questionId === question.id) ? (
-                      <div className="mt-4 rounded-xl bg-stone-50/90 p-3 text-sm dark:bg-slate-900/50">
-                        <p className="font-medium text-slate-800 dark:text-slate-100">
-                          Correct answer: {question.answer}
-                        </p>
-                        {question.explanation ? (
-                          <p className="mt-1 text-slate-600 dark:text-slate-300">{question.explanation}</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => latestQuiz && submitAttemptMutation.mutateAsync(latestQuiz.id)}
-                  disabled={submitAttemptMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[color:var(--app-border)] bg-[color:var(--app-surface)] px-4 py-3 text-sm font-semibold text-slate-800 transition-colors hover:bg-stone-100 disabled:opacity-60 dark:text-slate-100 dark:hover:bg-slate-800"
-                >
-                  {submitAttemptMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4" />
-                  )}
-                  Submit attempt
-                </button>
-
-                {latestAttempt ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
-                    <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-                      Latest score: {latestAttempt.score}/{latestAttempt.totalQuestions}
-                    </p>
-                    <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">
-                      Submitted {formatTimestamp(latestAttempt.createdAt)}
-                    </p>
-                  </div>
-                ) : null}
               </div>
             ) : (
               <p className="mt-5 text-sm text-slate-600 dark:text-slate-300">
-                No quiz exists for this material yet.
+                No quiz exists for this material yet. Generate it from the dedicated quiz area.
               </p>
             )}
           </Card>
@@ -1045,14 +906,15 @@ export function MaterialDetailPage() {
                             key={note.id}
                             className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950"
                           >
+                            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                              <span className="rounded-full bg-stone-100 px-2.5 py-1 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                {formatSessionDate(note.sessionDate)}
+                              </span>
+                              {note.timestamp ? <span>{new Date(note.timestamp).toLocaleString()}</span> : null}
+                            </div>
                             <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-200">
                               {note.content}
                             </p>
-                            {note.timestamp ? (
-                              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                                {new Date(note.timestamp).toLocaleString()}
-                              </p>
-                            ) : null}
                             {note.summary ? (
                               <div className="mt-3 rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
                                 {note.summary}

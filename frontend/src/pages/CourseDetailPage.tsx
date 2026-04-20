@@ -19,6 +19,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { getCourseDetail } from "../features/courses/api";
 import type { CourseNote, DayOfWeek, GoogleClassroomMaterial } from "../types/domain";
+import { formatSessionDate } from "../utils/date";
 
 type NotesView = "all" | "review";
 
@@ -54,6 +55,10 @@ function buildMaterialsLabel(note: CourseNote): string {
   }
 
   return `${formatDay(note.timetableEntry.dayOfWeek)} ${note.timetableEntry.startTime}-${note.timetableEntry.endTime}`;
+}
+
+function buildNoteSessionMeta(note: CourseNote) {
+  return `${formatSessionDate(note.sessionDate)} | ${formatTimestamp(note.timestamp)}`;
 }
 
 function getReviewStorageKey(courseId: string) {
@@ -435,17 +440,25 @@ export function CourseDetailPage() {
                           </Link>
                         </div>
 
-                        {material.alternateLink ? (
-                          <a
-                            href={material.alternateLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-sm font-medium text-teal-800 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200"
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={`/materials/${material.id}/quiz`}
+                            className="inline-flex items-center gap-1 rounded-xl border border-stone-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-stone-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
-                            Open
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        ) : null}
+                            Make quiz
+                          </Link>
+                          {material.alternateLink ? (
+                            <a
+                              href={material.alternateLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-sm font-medium text-teal-800 hover:text-teal-700 dark:text-teal-300 dark:hover:text-teal-200"
+                            >
+                              Open
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          ) : null}
+                        </div>
                       </div>
 
                       <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
@@ -577,7 +590,7 @@ export function CourseDetailPage() {
                                   {buildNoteTitle(note, index)}
                                 </p>
                                 <p className="mt-1 truncate text-xs text-slate-400">
-                                  {buildMaterialsLabel(note)} | {formatTimestamp(note.timestamp)}
+                                  {buildMaterialsLabel(note)} | {buildNoteSessionMeta(note)}
                                 </p>
                               </div>
                             </td>
@@ -656,7 +669,7 @@ export function CourseDetailPage() {
                       <span className="rounded-full bg-white px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                         {buildMaterialsLabel(selectedNote)}
                       </span>
-                      <span>{formatTimestamp(selectedNote.timestamp)}</span>
+                      <span>{buildNoteSessionMeta(selectedNote)}</span>
                     </div>
                   </div>
 

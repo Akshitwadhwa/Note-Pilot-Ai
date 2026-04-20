@@ -205,7 +205,7 @@ export async function getCourseDetail(userId: string, courseId: string) {
       ? []
       : await db.query.notes.findMany({
           where: and(eq(notes.userId, userId), inArray(notes.timetableId, timetableIds)),
-          orderBy: desc(notes.timestamp)
+          orderBy: [desc(notes.sessionDate), desc(notes.timestamp)]
         });
 
   const timetableById = new Map(timetableEntries.map((entry) => [entry.id, entry]));

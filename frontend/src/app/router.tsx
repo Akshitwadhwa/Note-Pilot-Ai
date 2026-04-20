@@ -5,6 +5,7 @@ import { LogoutSplashPage } from "../pages/LogoutSplashPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { TimetablePage } from "../pages/TimetablePage";
 import { MaterialDetailPage } from "../pages/MaterialDetailPage";
+import { MaterialQuizPage } from "../pages/MaterialQuizPage";
 import { MaterialsPage } from "../pages/MaterialsPage";
 import { NotesPage } from "../pages/NotesPage";
 import { PastNotesPage } from "../pages/PastNotesPage";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "timetable", element: <TimetablePage /> },
       { path: "materials", element: <MaterialsPage /> },
       { path: "materials/:materialId", element: <MaterialDetailPage /> },
+      { path: "materials/:materialId/quiz", element: <MaterialQuizPage /> },
       { path: "quiz-prep", element: <QuizPrepPage /> },
       { path: "courses", element: <Navigate to="/" replace /> },
       { path: "courses/:courseId", element: <Navigate to="/" replace /> },

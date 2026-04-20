@@ -4,12 +4,13 @@ import { FileText, Save, Sparkles, BookOpen, Slash, FileStack, Brain } from "luc
 import clsx from "clsx";
 
 import type { GoogleClassroomMaterial, Note, TimetableEntry } from "../../types/domain";
+import { formatSessionDate, getTodayLocalDateValue } from "../../utils/date";
 import { Card } from "../common/Card";
 
 type Props = {
   activeClass: TimetableEntry | null;
   notes: Note[];
-  onCreateNote: (payload: { timetableId: string; content: string }) => Promise<void>;
+  onCreateNote: (payload: { timetableId: string; sessionDate: string; content: string }) => Promise<void>;
   onSummarize: (noteId: string) => Promise<void>;
   enableSlashCommands?: boolean;
   classroomMaterials?: GoogleClassroomMaterial[];
@@ -74,6 +75,7 @@ export function NoteComposer({
   const [commandLoading, setCommandLoading] = useState(false);
   const slashTrigger = useMemo(() => getTrailingSlashTrigger(content), [content]);
   const filteredCommands = useMemo(() => getFilteredCommands(slashTrigger), [slashTrigger]);
+  const todaySessionDate = getTodayLocalDateValue();
 
   useEffect(() => {
     setContent("");
@@ -88,13 +90,21 @@ export function NoteComposer({
     () => classroomMaterials.find((material) => material.id === selectedMaterialId) ?? null,
     [classroomMaterials, selectedMaterialId]
   );
+  const todayNote = useMemo(
+    () => notes.find((note) => note.sessionDate === todaySessionDate) ?? null,
+    [notes, todaySessionDate]
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!activeClass || !content.trim()) {
       return;
     }
-    await onCreateNote({ timetableId: activeClass.id, content: content.trim() });
+    await onCreateNote({
+      timetableId: activeClass.id,
+      sessionDate: todaySessionDate,
+      content: content.trim()
+    });
     setContent("");
   }
 
@@ -358,7 +368,7 @@ export function NoteComposer({
               className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:bg-slate-800 hover:shadow-md active:scale-[0.98] dark:bg-teal-700 dark:text-white dark:hover:bg-teal-600"
             >
               <Save className="h-4 w-4" />
-              Save Note
+              {todayNote ? `Update ${formatSessionDate(todaySessionDate)} Note` : `Save ${formatSessionDate(todaySessionDate)} Note`}
             </button>
           </form>
 
@@ -379,6 +389,12 @@ export function NoteComposer({
                   key={note.id}
                   className="rounded-xl border border-slate-200 p-4 transition-colors hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
                 >
+                  <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      {formatSessionDate(note.sessionDate)}
+                    </span>
+                    <span>{new Date(note.timestamp).toLocaleString()}</span>
+                  </div>
                   <p className="whitespace-pre-wrap text-sm text-slate-800 dark:text-slate-300">
                     {note.content}
                   </p>

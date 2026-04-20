@@ -119,8 +119,8 @@ export function NotesPage() {
         notes={notesQuery.data ?? []}
         enableSlashCommands
         classroomMaterials={materialsForCurrentClass}
-        onCreateNote={async ({ timetableId, content }) => {
-          await createNoteMutation.mutateAsync({ timetableId, content });
+        onCreateNote={async ({ timetableId, sessionDate, content }) => {
+          await createNoteMutation.mutateAsync({ timetableId, sessionDate, content });
         }}
         onSummarize={async (noteId) => {
           await summarizeMutation.mutateAsync(noteId);

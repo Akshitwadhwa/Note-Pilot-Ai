@@ -600,8 +600,8 @@ export function DashboardPage() {
           <NoteComposer
             activeClass={currentClassQuery.data ?? null}
             notes={notesQuery.data ?? []}
-            onCreateNote={async ({ timetableId, content }) => {
-              await createNoteMutation.mutateAsync({ timetableId, content });
+            onCreateNote={async ({ timetableId, sessionDate, content }) => {
+              await createNoteMutation.mutateAsync({ timetableId, sessionDate, content });
             }}
             onSummarize={async (noteId) => {
               await summarizeMutation.mutateAsync(noteId);

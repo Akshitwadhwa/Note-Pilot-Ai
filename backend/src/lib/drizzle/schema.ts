@@ -265,13 +265,16 @@ export const notes = pgTable(
     id: text('id').primaryKey(),
     userId: text('userId').notNull(),
     timetableId: text('timetableId').notNull(),
+    sessionDate: text('sessionDate').notNull(),
     content: text('content').notNull(),
     summary: text('summary'),
     timestamp: timestamp('timestamp').defaultNow().notNull(),
     updatedAt: timestamp('updatedAt').defaultNow().notNull(),
   },
   (table) => ({
+    timetableIdSessionDateIndex: index('Note_timetableId_sessionDate_idx').on(table.timetableId, table.sessionDate),
     timetableIdTimestampIndex: index('Note_timetableId_timestamp_idx').on(table.timetableId, table.timestamp),
+    userIdSessionDateIndex: index('Note_userId_sessionDate_idx').on(table.userId, table.sessionDate),
     userIdTimestampIndex: index('Note_userId_timestamp_idx').on(table.userId, table.timestamp),
   })
 );

@@ -49,9 +49,11 @@ export type Note = {
   id: string;
   userId: string;
   timetableId: string;
+  sessionDate: string;
   content: string;
   summary?: string | null;
   timestamp: string;
+  updatedAt?: string;
 };
 
 export type Course = {
