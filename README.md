@@ -2,6 +2,8 @@
 
 Academic Timetable AI is an all-in-one student workspace for classes, course materials, notes, quizzes, and deadlines.
 
+![Academic Timetable AI preview](docs/ig_08e569be72d9e7390169e90b71989c81918d39b7f5cbdaac20.png)
+
 The app is built for a student workflow where course content does not live in one place. A student can manage their timetable, connect Google Classroom, sync teacher posts and materials, read AI-generated summaries, generate quizzes from study content, keep notes per class, and see only the updates that actually matter when they return to the dashboard.
 
 ## What This Project Is Building

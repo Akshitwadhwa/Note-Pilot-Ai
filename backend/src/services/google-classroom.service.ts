@@ -120,6 +120,7 @@ const GOOGLE_DRIVE_EXPORTS: Record<string, { exportMimeType: string; parser: "te
 };
 
 const ASSIGNMENT_LOOKAHEAD_DAYS = 7;
+const ASSIGNMENT_POST_LOOKBACK_DAYS = 21;
 const QUIZ_LOOKAHEAD_DAYS = 14;
 const QUIZ_POST_LOOKBACK_DAYS = 21;
 const WEEKDAY_INDEX: Record<string, number> = {
@@ -350,7 +351,7 @@ function getDueAt(material: MaterialRow | MaterialWithHydration) {
   const month = Number(dueDate?.month);
   const day = Number(dueDate?.day);
   if (!year || !month || !day) {
-    return null;
+    return inferCourseWorkDueAt(material);
   }
 
   const hours = Number(dueTime?.hours ?? 23);
@@ -358,7 +359,11 @@ function getDueAt(material: MaterialRow | MaterialWithHydration) {
   const seconds = Number(dueTime?.seconds ?? 0);
 
   const date = new Date(year, month - 1, day, hours, minutes, seconds);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) {
+    return inferCourseWorkDueAt(material);
+  }
+
+  return date;
 }
 
 function getMaterialWorkType(material: MaterialRow | MaterialWithHydration) {
@@ -426,22 +431,29 @@ function addDays(date: Date, days: number) {
 
 function parseExplicitMonthDate(text: string, referenceAt: Date) {
   const dayMonthMatch = text.match(
-    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b/i
+    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)(?:\s+(\d{4}))?\b/i
   );
   const monthDayMatch = text.match(
-    /\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i
+    /\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i
   );
 
   const day = dayMonthMatch ? Number(dayMonthMatch[1]) : monthDayMatch ? Number(monthDayMatch[2]) : 0;
   const monthToken = dayMonthMatch ? dayMonthMatch[2].toLowerCase() : monthDayMatch ? monthDayMatch[1].toLowerCase() : "";
   const month = monthToken ? MONTH_INDEX[monthToken] : undefined;
+  const explicitYear = dayMonthMatch
+    ? Number(dayMonthMatch[3] ?? "")
+    : monthDayMatch
+      ? Number(monthDayMatch[3] ?? "")
+      : NaN;
 
   if (!day || month === undefined) {
     return null;
   }
 
-  let candidate = endOfDay(new Date(referenceAt.getFullYear(), month, day));
-  if (candidate.getTime() < referenceAt.getTime()) {
+  let candidate = endOfDay(
+    new Date(Number.isFinite(explicitYear) && explicitYear > 0 ? explicitYear : referenceAt.getFullYear(), month, day)
+  );
+  if ((!Number.isFinite(explicitYear) || explicitYear <= 0) && candidate.getTime() < referenceAt.getTime()) {
     candidate = endOfDay(new Date(referenceAt.getFullYear() + 1, month, day));
   }
 
@@ -475,6 +487,49 @@ function inferPostQuizAt(material: MaterialWithHydration) {
   }
 
   const text = `${material.title} ${material.description ?? ""}`.toLowerCase();
+
+  if (/\bday after tomorrow\b/.test(text)) {
+    return endOfDay(addDays(referenceAt, 2));
+  }
+
+  if (/\btomorrow\b/.test(text)) {
+    return endOfDay(addDays(referenceAt, 1));
+  }
+
+  if (/\btoday\b/.test(text)) {
+    return endOfDay(referenceAt);
+  }
+
+  if (/\bnext week\b/.test(text)) {
+    return endOfDay(addDays(referenceAt, 7));
+  }
+
+  const explicitDate = parseExplicitMonthDate(text, referenceAt);
+  if (explicitDate) {
+    return explicitDate;
+  }
+
+  const weekdayDate = parseWeekdayMention(text, referenceAt);
+  if (weekdayDate) {
+    return weekdayDate;
+  }
+
+  return null;
+}
+
+function inferCourseWorkDueAt(material: MaterialRow | MaterialWithHydration) {
+  const referenceAt = getMaterialReferenceDate(material);
+  if (!referenceAt) {
+    return null;
+  }
+
+  const text = `${material.title} ${material.description ?? ""}`.toLowerCase();
+  const mentionsDueIntent =
+    /\bdue\b|\bdeadline\b|\bsubmit\b|\bsubmission\b|\bassignment\b|\bquiz\b|\btest\b|\bexam\b/.test(text);
+
+  if (!mentionsDueIntent) {
+    return null;
+  }
 
   if (/\bday after tomorrow\b/.test(text)) {
     return endOfDay(addDays(referenceAt, 2));
@@ -1311,6 +1366,18 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
   const upcomingAssignments = assignments.filter((entry) =>
     isUpcomingWithin(entry.dueAt, ASSIGNMENT_LOOKAHEAD_DAYS, now)
   );
+  const recentUndatedAssignments = hydratedMaterials
+    .filter(isAssignmentLikeMaterial)
+    .filter((material) => !getDueAt(material))
+    .map((material) => ({
+      material,
+      referenceAt: getMaterialReferenceDate(material)
+    }))
+    .filter(
+      (entry): entry is { material: MaterialWithHydration; referenceAt: Date } =>
+        Boolean(entry.referenceAt)
+    )
+    .filter((entry) => isRecentWithin(entry.referenceAt, ASSIGNMENT_POST_LOOKBACK_DAYS, now));
   const upcomingQuizCourseWork = quizzes.filter((entry) => isUpcomingWithin(entry.dueAt, QUIZ_LOOKAHEAD_DAYS, now));
   const recentQuizPosts = hydratedMaterials
     .filter((material) => material.sourceType !== "course_work" && isQuizLikeMaterial(material))
@@ -1330,11 +1397,41 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
     );
 
   const seenQuizKeys = new Set<string>();
+  const seenAssignmentKeys = new Set<string>();
+  const mergedAssignmentCandidates: Array<{
+    material: MaterialWithHydration;
+    displayAt: Date;
+    timingLabel: "due" | "posted";
+  }> = [];
   const mergedQuizCandidates: Array<{
     material: MaterialWithHydration;
     displayAt: Date;
     timingLabel: "due" | "posted";
   }> = [];
+
+  for (const entry of upcomingAssignments) {
+    const dedupKey = normalizeDashboardDedupKey(entry.material);
+    if (seenAssignmentKeys.has(dedupKey)) continue;
+    seenAssignmentKeys.add(dedupKey);
+    mergedAssignmentCandidates.push({
+      material: entry.material,
+      displayAt: entry.dueAt,
+      timingLabel: "due"
+    });
+  }
+
+  for (const entry of recentUndatedAssignments) {
+    const dedupKey = normalizeDashboardDedupKey(entry.material);
+    if (seenAssignmentKeys.has(dedupKey)) continue;
+    seenAssignmentKeys.add(dedupKey);
+    mergedAssignmentCandidates.push({
+      material: entry.material,
+      displayAt: entry.referenceAt,
+      timingLabel: "posted"
+    });
+  }
+
+  mergedAssignmentCandidates.sort((a, b) => a.displayAt.getTime() - b.displayAt.getTime());
 
   for (const entry of upcomingQuizCourseWork) {
     const dedupKey = normalizeDashboardDedupKey(entry.material);
@@ -1361,7 +1458,7 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
   mergedQuizCandidates.sort((a, b) => a.displayAt.getTime() - b.displayAt.getTime());
 
   const assignmentItems = await Promise.all(
-    upcomingAssignments.slice(0, 3).map(async ({ material, dueAt }) => {
+    mergedAssignmentCandidates.slice(0, 3).map(async ({ material, displayAt, timingLabel }) => {
       const insight = await generateDashboardInsight(material, "assignment");
 
       return {
@@ -1371,8 +1468,8 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
         description: material.description,
         alternateLink: material.alternateLink,
         referenceAt: (material.sourceUpdatedAt ?? material.publishedAt ?? material.createdAt).toISOString(),
-        displayAt: dueAt.toISOString(),
-        timingLabel: "due" as const,
+        displayAt: displayAt.toISOString(),
+        timingLabel,
         workType: getMaterialWorkType(material),
         itemType: "assignment" as const,
         sourceType: material.sourceType,
@@ -1406,8 +1503,8 @@ export async function getGoogleClassroomDashboardSummary(userId: string) {
 
   return {
     connected: true,
-    totalUpcomingCount: upcomingAssignments.length + mergedQuizCandidates.length,
-    assignmentsDueCount: upcomingAssignments.length,
+    totalUpcomingCount: mergedAssignmentCandidates.length + mergedQuizCandidates.length,
+    assignmentsDueCount: mergedAssignmentCandidates.length,
     overdueAssignmentsCount,
     quizzesComingCount: mergedQuizCandidates.length,
     upcomingAssignments: assignmentItems,
