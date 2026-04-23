@@ -9,6 +9,8 @@ import {
   History,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
   Sun,
   Moon
@@ -60,7 +62,22 @@ export function AuthenticatedLayout() {
   const { userReady, userEmail, signOut, authReady } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem("app-sidebar-collapsed") === "true";
+  });
   const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem("app-sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   if (!authReady) {
     return (
@@ -98,7 +115,8 @@ export function AuthenticatedLayout() {
       <aside
         className={clsx(
           "fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-[color:var(--app-border)] bg-[color:var(--app-surface)]/95 backdrop-blur-xl dark:border-[color:var(--app-border)] dark:bg-slate-900/88",
-          "transition-transform duration-300 lg:static lg:translate-x-0",
+          "transition-transform duration-300 lg:static",
+          sidebarCollapsed ? "lg:-translate-x-full lg:hidden" : "lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -114,10 +132,18 @@ export function AuthenticatedLayout() {
             <p className="text-xs text-slate-500 dark:text-slate-400">Planner and notes</p>
           </div>
           <button
-            className="ml-auto rounded-xl p-2 text-slate-400 hover:bg-stone-100 hover:text-slate-700 lg:hidden dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            className="ml-auto rounded-xl p-2 text-slate-400 hover:bg-stone-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-300"
             onClick={() => setSidebarOpen(false)}
           >
             <X className="h-5 w-5" />
+          </button>
+          <button
+            className="hidden rounded-xl p-2 text-slate-400 hover:bg-stone-100 hover:text-slate-700 lg:inline-flex dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            onClick={() => setSidebarCollapsed(true)}
+            aria-label="Hide sidebar"
+            title="Hide sidebar"
+          >
+            <PanelLeftClose className="h-5 w-5" />
           </button>
         </div>
 
@@ -176,12 +202,35 @@ export function AuthenticatedLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[color:var(--app-border)] bg-[color:var(--app-surface)]/82 px-5 py-4 backdrop-blur-xl dark:border-[color:var(--app-border)] dark:bg-slate-950/68">
-          <button
-            className="rounded-xl p-2 text-slate-600 hover:bg-stone-100 lg:hidden dark:text-slate-400 dark:hover:bg-slate-800"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="rounded-xl p-2 text-slate-600 hover:bg-stone-100 lg:hidden dark:text-slate-400 dark:hover:bg-slate-800"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
+            {sidebarCollapsed ? (
+              <button
+                className="hidden items-center gap-2 rounded-2xl border border-[color:var(--app-border)] bg-white/55 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 lg:inline-flex dark:border-[color:var(--app-border)] dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800"
+                onClick={() => setSidebarCollapsed(false)}
+                aria-label="Show sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+                Show menu
+              </button>
+            ) : (
+              <button
+                className="hidden items-center gap-2 rounded-2xl border border-[color:var(--app-border)] bg-white/55 px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 lg:inline-flex dark:border-[color:var(--app-border)] dark:bg-slate-900/80 dark:text-slate-300 dark:hover:bg-slate-800"
+                onClick={() => setSidebarCollapsed(true)}
+                aria-label="Hide sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+                Hide menu
+              </button>
+            )}
+          </div>
 
           <div className="flex-1" />
 
